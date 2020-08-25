@@ -84,8 +84,10 @@ static bool areEquivalentAddrDiscriminators(const Value *V1, const Value *V2,
     V1 = V1Cast->getPointerOperand();
   if (auto *V2Cast = dyn_cast<PtrToIntOperator>(V2))
     V2 = V2Cast->getPointerOperand();
-  auto *V1Base = V1->stripAndAccumulateInBoundsConstantOffsets(DL, V1Off);
-  auto *V2Base = V2->stripAndAccumulateInBoundsConstantOffsets(DL, V2Off);
+  auto *V1Base =
+    V1->stripAndAccumulateConstantOffsets(DL, V1Off, /*AllowNonInbounds=*/true);
+  auto *V2Base =
+    V2->stripAndAccumulateConstantOffsets(DL, V2Off, /*AllowNonInbounds=*/true);
   return V1Base == V2Base && V1Off == V2Off;
 }
 
