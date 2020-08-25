@@ -912,7 +912,7 @@ public:
   struct PtrAuthData {
     union {
       struct {
-        unsigned Key : 3;
+        unsigned Key : 4;
         unsigned IsAddressDiscriminated : 1;
         unsigned ExtraDiscriminator : 16;
       } Data;
@@ -921,7 +921,7 @@ public:
 
     PtrAuthData(unsigned FromRawData) { Payload.RawData = FromRawData; }
     PtrAuthData(unsigned Key, bool IsDiscr, unsigned Discriminator) {
-      assert(Key < 8);
+      assert(Key < 16);
       assert(Discriminator <= 0xffff);
       Payload.Data.Key = Key;
       Payload.Data.IsAddressDiscriminated = IsDiscr;
