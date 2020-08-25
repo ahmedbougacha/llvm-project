@@ -17,9 +17,12 @@ be signed/authenticated.
 At the IR level, it is represented using:
 
 * a [set of intrinsics](#intrinsics) (to sign/authenticate pointers)
+* a [call operand bundle](#operand-bundle) (to authenticate called pointers)
 * a [special section and relocation](#authenticated-global-relocation)
   (to sign globals)
-* a [call operand bundle](#operand-bundle) (to authenticate called pointers)
+* a [set of function attributes](#attributes) (to describe what pointers are
+  signed and how, to control implicit codegen in the backend, as well as
+  preserve invariants in the mid-level optimizer)
 
 It is implemented by the [AArch64 target](#aarch64-support), using the
 [ARMv8.3 Pointer Authentication Code](#armv8-3-pointer-authentication-code)
@@ -83,7 +86,7 @@ operations.
 ##### Syntax:
 
 ```llvm
-declare i64 @llvm.ptrauth.sign.i64(i64 <value>, i32 <key>, i64 <extra data>)
+declare i64 @llvm.ptrauth.sign(i64 <value>, i32 <key>, i64 <extra data>)
 ```
 
 ##### Overview:
@@ -115,7 +118,7 @@ behavior is undefined.
 ##### Syntax:
 
 ```llvm
-declare i64 @llvm.ptrauth.auth.i64(i64 <value>, i32 <key>, i64 <extra data>)
+declare i64 @llvm.ptrauth.auth(i64 <value>, i32 <key>, i64 <extra data>)
 ```
 
 ##### Overview:
@@ -143,7 +146,7 @@ the returned value is an invalid, poison pointer.
 ##### Syntax:
 
 ```llvm
-declare i64 @llvm.ptrauth.strip.i64(i64 <value>, i32 <key>)
+declare i64 @llvm.ptrauth.strip(i64 <value>, i32 <key>)
 ```
 
 ##### Overview:
@@ -179,9 +182,9 @@ same ``key`` that was used to generate ``value``, the behavior is undefined.
 ##### Syntax:
 
 ```llvm
-declare i64 @llvm.ptrauth.resign.i64(i64 <value>,
-                                     i32 <old key>, i64 <old extra data>,
-                                     i32 <new key>, i64 <new extra data>)
+declare i64 @llvm.ptrauth.resign(i64 <value>,
+                                 i32 <old key>, i64 <old extra data>,
+                                 i32 <new key>, i64 <new extra data>)
 ```
 
 ##### Overview:
@@ -214,7 +217,7 @@ If ``value`` does not have a correct signature for ``old key`` and
 ##### Syntax:
 
 ```llvm
-declare i64 @llvm.ptrauth.sign_generic.i64(i64 <value>, i64 <extra data>)
+declare i64 @llvm.ptrauth.sign_generic(i64 <value>, i64 <extra data>)
 ```
 
 ##### Overview:
@@ -245,7 +248,7 @@ As opposed to [``llvm.ptrauth.sign``](#llvm-ptrauth-sign), it does not interpret
 ##### Syntax:
 
 ```llvm
-declare i64 @llvm.ptrauth.blend.i64(i64 <address discriminator>, i64 <integer discriminator>)
+declare i64 @llvm.ptrauth.blend(i64 <address discriminator>, i64 <integer discriminator>)
 ```
 
 ##### Overview:
