@@ -28,7 +28,7 @@ class MachineModuleInfoMachO : public MachineModuleInfoImpl {
 public:
   /// The information specific to a Darwin '$auth_ptr' stub.
   struct AuthStubInfo {
-    const MCExpr *Pointer;
+    const MCExpr *AuthPtrRef;
   };
 
 private:
@@ -45,7 +45,7 @@ private:
   /// Darwin '$auth_ptr' stubs.  The key is the stub symbol, like
   /// "Lfoo$addend$auth_ptr$ib$12".  The value is the MCExpr representing that
   /// pointer, something like "_foo+addend@AUTH(ib, 12)".
-  DenseMap<MCSymbol *, AuthStubInfo> AuthGVStubs;
+  DenseMap<MCSymbol *, AuthStubInfo> AuthPtrStubs;
 
   virtual void anchor(); // Out of line virtual method.
 
@@ -62,9 +62,9 @@ public:
     return ThreadLocalGVStubs[Sym];
   }
 
-  AuthStubInfo &getAuthGVStubEntry(MCSymbol *Sym) {
+  AuthStubInfo &getAuthPtrStubEntry(MCSymbol *Sym) {
     assert(Sym && "Key cannot be null");
-    return AuthGVStubs[Sym];
+    return AuthPtrStubs[Sym];
   }
 
   /// Accessor methods to return the set of stubs in sorted order.
@@ -76,18 +76,7 @@ public:
   typedef std::pair<MCSymbol *, AuthStubInfo> AuthStubPairTy;
   typedef std::vector<AuthStubPairTy> AuthStubListTy;
 
-  AuthStubListTy getAuthGVStubList() {
-    AuthStubListTy List(AuthGVStubs.begin(), AuthGVStubs.end());
-
-    if (!List.empty())
-      std::sort(List.begin(), List.end(),
-                [](const AuthStubPairTy &LHS, const AuthStubPairTy &RHS) {
-                  return LHS.first->getName() < RHS.first->getName();
-                });
-
-    AuthGVStubs.clear();
-    return List;
-  }
+  AuthStubListTy getAuthGVStubList();
 };
 
 /// MachineModuleInfoELF - This is a MachineModuleInfoImpl implementation

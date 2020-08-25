@@ -733,12 +733,14 @@ let isNotDuplicable = 1 in
 def JumpTableAnchor : Pseudo<(outs GPR64:$pc), (ins i32imm:$jti), []>,
                       Sched<[WriteI]>;
 
+let isNotDuplicable = 1 in
 def BR_JumpTable : Pseudo<(outs), (ins i32imm:$jti), []>,
                    Sched<[]> {
   let isBranch = 1;
   let isTerminator = 1;
   let isIndirectBranch = 1;
   let isBarrier = 1;
+  let isNotDuplicable = 1;
   let Defs = [X16,X17,NZCV];
   let Uses = [X16];
   let Size = 44; // 28 fixed + 16 variable, for table size materialization
@@ -1209,6 +1211,38 @@ let Predicates = [HasPAuth] in {
     let mayLoad = 0;
     let Defs = [X16,X17,NZCV];
     let Uses = [X16];
+  }
+
+  // Materialize a signed global address, with adrp+add and PAC.
+  def MOVaddrPAC : Pseudo<(outs),
+                          (ins i64imm:$Addr, i32imm:$Key,
+                               GPR64noip:$AddrDisc, i64imm:$Disc), []>,
+               Sched<[WriteI, ReadI]> {
+    let isReMaterializable = 1;
+    let isCodeGenOnly = 1;
+    let Size = 32; // ranges from 12 to 32
+    let Defs = [X16,X17];
+  }
+
+  // Materialize a signed global address, using a GOT load and PAC.
+  def LOADgotPAC : Pseudo<(outs),
+                          (ins i64imm:$Addr, i32imm:$Key,
+                               GPR64noip:$AddrDisc, i64imm:$Disc), []>,
+               Sched<[WriteI, ReadI]> {
+    let isReMaterializable = 1;
+    let isCodeGenOnly = 1;
+    let Size = 32; // ranges from 12 to 32
+    let Defs = [X16,X17];
+  }
+
+  // Load a signed global address from our auth_ptr compiler GOT
+  def LOADauthptrgot : Pseudo<(outs GPR64:$dst),
+                              (ins i64imm:$Addr, i32imm:$Key,
+                                   i64imm:$Disc), []>,
+               Sched<[WriteI, ReadI]> {
+    let isReMaterializable = 1;
+    let isCodeGenOnly = 1;
+    let Size = 8;
   }
 
   let isCall = 1, isTerminator = 1, isReturn = 1, isBarrier = 1,

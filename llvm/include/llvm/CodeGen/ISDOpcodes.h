@@ -77,7 +77,9 @@ enum NodeType {
   BlockAddress,
 
   /// A llvm.ptrauth global
-  /// wrapper llvm.ptrauth global, ptr, key, addr-disc, disc
+  /// ptr, key, addr-disc, disc
+  /// Note that the addr-disc can be a non-constant value, to allow representing
+  /// a constant global address signed using address-diversification, in code.
   PtrAuthGlobalAddress,
 
   /// The address of the GOT

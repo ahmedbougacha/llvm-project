@@ -1,4 +1,5 @@
 ; RUN: llc -verify-machineinstrs -o - %s -mtriple=arm64-apple-ios -aarch64-enable-atomic-cfg-tidy=0 | FileCheck %s
+; RUN: llc -verify-machineinstrs -o - %s -mtriple=arm64-apple-ios -code-model=large -aarch64-enable-atomic-cfg-tidy=0 | FileCheck %s
 
 ; CHECK-LABEL: test_jumptable:
 ; CHECK: mov   w[[INDEX:[0-9]+]], w0
@@ -8,7 +9,7 @@
 ; CHECK: add   x[[JT:[0-9]+]], [[JTPAGE]], LJTI0_0@PAGEOFF
 ; CHECK: ldrsw [[OFFSET:x[0-9]+]], [x[[JT]], [[INDEX2]], lsl #2]
 ; CHECK: Ltmp0:
-; CHECK:   adr [[TABLE:x[0-9]+]], Ltmp0
+; CHECK: adr   [[TABLE:x[0-9]+]], Ltmp0
 ; CHECK: add   [[DEST:x[0-9]+]], [[TABLE]], [[OFFSET]]
 ; CHECK: br    [[DEST]]
 

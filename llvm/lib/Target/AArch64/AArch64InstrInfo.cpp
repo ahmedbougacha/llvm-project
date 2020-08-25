@@ -132,6 +132,15 @@ unsigned AArch64InstrInfo::getInstSizeInBytes(const MachineInstr &MI) const {
   case AArch64::AUTPAC:
     NumBytes = 48;
     break;
+  case AArch64::LOADgotPAC:
+  case AArch64::MOVaddrPAC:
+    // 12 fixed + 20 variable, for pointer offset, and discriminator
+    // We could potentially model the variable size overhead more accurately.
+    NumBytes = 32;
+    break;
+  case AArch64::LOADauthptrgot:
+    NumBytes = 8;
+    break;
   case AArch64::AUTH_TCRETURNrii:
   case AArch64::AUTH_TCRETURNriri:
   case AArch64::AUTH_TCRETURN_BTIrii:
@@ -142,6 +151,11 @@ unsigned AArch64InstrInfo::getInstSizeInBytes(const MachineInstr &MI) const {
   case AArch64::TCRETURNdi:
     // 4 fixed + 12 variable to check LR.
     return 16;
+  case AArch64::BR_JumpTable:
+    // 28 fixed + 16 variable, for table size materialization
+    // We could potentially model the variable size overhead more accurately.
+    NumBytes = 44;
+    break;
   case AArch64::JumpTableDest32:
   case AArch64::JumpTableDest16:
   case AArch64::JumpTableDest8:

@@ -12,6 +12,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "AArch64MCInstLower.h"
+#include "AArch64TargetObjectFile.h"
 #include "MCTargetDesc/AArch64MCExpr.h"
 #include "Utils/AArch64BaseInfo.h"
 #include "llvm/ADT/StringExtras.h"
@@ -38,60 +39,13 @@ AArch64MCInstLower::AArch64MCInstLower(MCContext &ctx, AsmPrinter &printer)
     : Ctx(ctx), Printer(printer) {}
 
 static MCSymbol *getAuthGVStub(const GlobalVariable *GVB, AsmPrinter &Printer) {
-  auto PAI = *GlobalPtrAuthInfo::analyze(GVB);
+  assert(Printer.TM.getTargetTriple().isOSBinFormatMachO() &&
+         "auth_ptr stubs only implemented on macho");
+  auto &TLOF = static_cast<const AArch64_MachoTargetObjectFile &>(
+      Printer.getObjFileLowering());
 
-  // Figure out the base symbol and the addend, if any.
-  APInt Offset(64, 0);
-  const Value *BaseGV =
-    PAI.getPointer()->stripAndAccumulateConstantOffsets(
-      Printer.getDataLayout(), Offset, /*AllowNonInbounds=*/true);
-
-  auto *BaseGVB = dyn_cast<GlobalValue>(BaseGV);
-
-  // If we can't understand the referenced ConstantExpr, there's nothing
-  // else we can do: emit an error.
-  if (!BaseGVB) {
-    BaseGVB = PAI.getGV();
-
-    std::string Buf;
-    raw_string_ostream OS(Buf);
-    OS << "Couldn't resolve target base/addend of llvm.ptrauth global '"
-      << *BaseGVB << "'";
-    BaseGV->getContext().emitError(OS.str());
-  }
-
-  uint16_t Discriminator = PAI.getDiscriminator()->getZExtValue();
-
-  auto *KeyC = PAI.getKey();
-  assert(isUInt<2>(KeyC->getZExtValue()) && "Invalid PAC Key ID");
-  AArch64PACKey::ID Key = AArch64PACKey::ID(KeyC->getZExtValue());
-
-  // Mangle the offset into the stub name.  Avoid '-' in symbols and extra logic
-  // by using the uint64_t representation for negative numbers.
-  uint64_t OffsetV = Offset.getSExtValue();
-  std::string Suffix = "$";
-  if (OffsetV)
-    Suffix += utostr(OffsetV) + "$";
-  Suffix += (Twine("auth_ptr$") + AArch64PACKeyIDToString(Key) + "$" +
-             utostr(Discriminator))
-                .str();
-
-  if (PAI.hasAddressDiversity())
-    report_fatal_error("Can't reference an address-diversified ptrauth global"
-                       " in an instruction.");
-
-  MCSymbol *MCSym = Printer.OutContext.getOrCreateSymbol(
-      Printer.getDataLayout().getLinkerPrivateGlobalPrefix() + "_" +
-      BaseGVB->getName() + Suffix);
-
-  MachineModuleInfoMachO &MMIMachO =
-      Printer.MMI->getObjFileInfo<MachineModuleInfoMachO>();
-  MachineModuleInfoMachO::AuthStubInfo &StubInfo =
-      MMIMachO.getAuthGVStubEntry(MCSym);
-
-  if (!StubInfo.Pointer)
-    StubInfo.Pointer = Printer.lowerPtrAuthGlobalConstant(PAI);
-  return MCSym;
+  return TLOF.getAuthPtrSlotSymbol(Printer.TM, Printer.MMI,
+                                   *GlobalPtrAuthInfo::analyze(GVB));
 }
 
 MCSymbol *

@@ -886,10 +886,10 @@ private:
                                  SelectionDAG &DAG) const;
   SDValue LowerWindowsGlobalTLSAddress(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerPtrAuthGlobalAddress(SDValue Op, SelectionDAG &DAG) const;
-  SDValue LowerPtrAuthGlobalAddressViaGOT(SDValue Wrapper,
+  SDValue LowerPtrAuthGlobalAddressViaGOT(SDValue TGA, SDLoc DL, EVT VT,
                                           AArch64PACKey::ID Key,
-                                          bool HasAddrDiversity,
-                                          GlobalAddressSDNode *PtrBaseGA,
+                                          SDValue Discriminator,
+                                          SDValue AddrDiscriminator,
                                           SelectionDAG &DAG) const;
   SDValue LowerSETCC(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerBR_CC(SDValue Op, SelectionDAG &DAG) const;

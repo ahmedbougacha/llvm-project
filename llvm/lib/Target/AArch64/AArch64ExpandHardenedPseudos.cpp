@@ -5,12 +5,11 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
-//
-//===----------------------------------------------------------------------===//
 
 #include "AArch64InstrInfo.h"
 #include "AArch64Subtarget.h"
 #include "AArch64MachineFunctionInfo.h"
+#include "AArch64TargetObjectFile.h"
 #include "MCTargetDesc/AArch64AddressingModes.h"
 #include "Utils/AArch64BaseInfo.h"
 #include "llvm/ADT/BitVector.h"
@@ -24,6 +23,7 @@
 #include "llvm/CodeGen/MachineOperand.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/IR/DebugLoc.h"
+#include "llvm/MC/MCContext.h"
 #include "llvm/Pass.h"
 #include "llvm/Support/CodeGen.h"
 #include "llvm/Support/Debug.h"
@@ -53,6 +53,7 @@ public:
   }
 
 private:
+  bool expandPtrAuthPseudo(MachineInstr &MI);
   bool expandMI(MachineInstr &MI);
 };
 
@@ -62,7 +63,7 @@ char AArch64ExpandHardenedPseudos::ID = 0;
 
 INITIALIZE_PASS(AArch64ExpandHardenedPseudos, DEBUG_TYPE, PASS_NAME, false, false);
 
-bool AArch64ExpandHardenedPseudos::expandMI(MachineInstr &MI) {
+bool AArch64ExpandHardenedPseudos::expandPtrAuthPseudo(MachineInstr &MI) {
   MachineBasicBlock &MBB = *MI.getParent();
   MachineFunction &MF = *MBB.getParent();
   DebugLoc DL = MI.getDebugLoc();
@@ -135,7 +136,7 @@ bool AArch64ExpandHardenedPseudos::expandMI(MachineInstr &MI) {
     MachineOperand JTHiOp(JTOp);
     MachineOperand JTLoOp(JTOp);
     JTHiOp.setTargetFlags(AArch64II::MO_PAGE);
-    JTLoOp.setTargetFlags(AArch64II::MO_PAGEOFF);
+    JTLoOp.setTargetFlags(AArch64II::MO_PAGEOFF | AArch64II::MO_NC);
 
     BuildMI(MBB, MBBI, DL, TII->get(AArch64::ADRP), AArch64::X17)
       .add(JTHiOp);
@@ -166,22 +167,71 @@ bool AArch64ExpandHardenedPseudos::expandMI(MachineInstr &MI) {
     return true;
   }
 
-  if (MI.getOpcode() != AArch64::MOVaddrPAC)
+  if (MI.getOpcode() == AArch64::LOADauthptrgot) {
+    LLVM_DEBUG(dbgs() << "Expanding: " << MI << "\n");
+
+    const TargetMachine &TM = MF.getTarget();
+    MachineModuleInfo &MMI = MF.getMMI();
+
+    unsigned DstReg = MI.getOperand(0).getReg();
+    MachineOperand GAOp = MI.getOperand(1);
+    auto Key = (AArch64PACKey::ID)MI.getOperand(2).getImm();
+    uint64_t Disc = MI.getOperand(3).getImm();
+
+    assert(isUInt<16>(Disc) && "Constant discriminator is too wide");
+
+    MCSymbol *GASym = TM.getSymbol(GAOp.getGlobal());
+    uint64_t Offset = GAOp.getOffset();
+
+    // On arm64e with ptrauth-calls we instead emit:
+    // ADRP x16, l_symbol$auth_ptr$ia$0@PAGE
+    // LDR x16, [x16, l_symbol$auth_ptr$ia$0@PAGEOFF]
+    //
+    // Where the $auth_ptr$ symbol is the stub slot containing the signed pointer
+    // to _symbol.
+    // We defined the stub ourselves, so we don't need a GOT access.
+    assert(TM.getTargetTriple().isOSBinFormatMachO() &&
+           "ptrauth chkstk_darwin only implemented on mach-o");
+    auto *TLOF =
+      static_cast<AArch64_MachoTargetObjectFile *>(TM.getObjFileLowering());
+    MCSymbol *AuthPtrStubSym =
+        TLOF->getAuthPtrSlotSymbol(TM, &MMI, GASym, Offset, Key, Disc);
+
+    BuildMI(MBB, MBBI, DL, TII->get(AArch64::ADRP), DstReg)
+      .addSym(AuthPtrStubSym, AArch64II::MO_PAGE);
+    BuildMI(MBB, MBBI, DL, TII->get(AArch64::LDRXui), DstReg)
+      .addUse(DstReg)
+      .addSym(AuthPtrStubSym, AArch64II::MO_PAGEOFF | AArch64II::MO_NC);
+
+    MI.eraseFromParent();
+    return true;
+  }
+
+  if (MI.getOpcode() != AArch64::MOVaddrPAC &&
+      MI.getOpcode() != AArch64::LOADgotPAC)
     return false;
 
   LLVM_DEBUG(dbgs() << "Expanding: " << MI << "\n");
 
-
+  const bool IsGOTLoad = MI.getOpcode() == AArch64::LOADgotPAC;
   MachineOperand GAOp = MI.getOperand(0);
-  uint64_t Offset = MI.getOperand(1).getImm();
-  auto Key = (AArch64PACKey::ID)MI.getOperand(2).getImm();
-  unsigned AddrDisc = MI.getOperand(3).getReg();
-  uint64_t Disc = MI.getOperand(4).getImm();
+  auto Key = (AArch64PACKey::ID)MI.getOperand(1).getImm();
+  unsigned AddrDisc = MI.getOperand(2).getReg();
+  uint64_t Disc = MI.getOperand(3).getImm();
+
+  uint64_t Offset = GAOp.getOffset();
+  GAOp.setOffset(0);
 
   // Emit:
   // target materialization:
+  //   via GOT:
   //     adrp x16, _target@GOTPAGE
   //     ldr x16, [x16, _target@GOTPAGEOFF]
+  //     add x16, x16, #<offset> ; if offset != 0; up to 3 depending on width
+  //
+  //   direct:
+  //     adrp x16, _target@PAGE
+  //     add x16, x16, _target@PAGEOFF
   //     add x16, x16, #<offset> ; if offset != 0; up to 3 depending on width
   //
   // signing:
@@ -195,15 +245,26 @@ bool AArch64ExpandHardenedPseudos::expandMI(MachineInstr &MI) {
 
   MachineOperand GAHiOp(GAOp);
   MachineOperand GALoOp(GAOp);
-  GAHiOp.setTargetFlags(AArch64II::MO_GOT | AArch64II::MO_PAGE);
-  GALoOp.setTargetFlags(AArch64II::MO_GOT | AArch64II::MO_PAGEOFF);
+  GAHiOp.setTargetFlags(AArch64II::MO_PAGE);
+  GALoOp.setTargetFlags(AArch64II::MO_PAGEOFF | AArch64II::MO_NC);
+  if (IsGOTLoad) {
+    GAHiOp.addTargetFlag(AArch64II::MO_GOT);
+    GALoOp.addTargetFlag(AArch64II::MO_GOT);
+  }
 
   BuildMI(MBB, MBBI, DL, TII->get(AArch64::ADRP), AArch64::X16)
     .add(GAHiOp);
 
-  BuildMI(MBB, MBBI, DL, TII->get(AArch64::LDRXui), AArch64::X16)
-    .addReg(AArch64::X16)
-    .add(GALoOp);
+  if (IsGOTLoad) {
+    BuildMI(MBB, MBBI, DL, TII->get(AArch64::LDRXui), AArch64::X16)
+      .addReg(AArch64::X16)
+      .add(GALoOp);
+  } else {
+    BuildMI(MBB, MBBI, DL, TII->get(AArch64::ADDXri), AArch64::X16)
+      .addReg(AArch64::X16)
+      .add(GALoOp)
+      .addImm(0);
+  }
 
   if (Offset) {
     if (!isUInt<32>(Offset))
@@ -217,15 +278,25 @@ bool AArch64ExpandHardenedPseudos::expandMI(MachineInstr &MI) {
     }
   }
 
-  unsigned DiscReg = AArch64::XZR;
+  unsigned DiscReg = AddrDisc;
   if (Disc) {
+    assert(isUInt<16>(Disc) && "Constant discriminator is too wide");
+
+    if (AddrDisc != AArch64::XZR) {
+      BuildMI(MBB, MBBI, DL, TII->get(AArch64::ORRXrs), AArch64::X17)
+        .addReg(AArch64::XZR)
+        .addReg(AddrDisc)
+        .addImm(0);
+      BuildMI(MBB, MBBI, DL, TII->get(AArch64::MOVKXi), AArch64::X17)
+        .addReg(AArch64::X17)
+        .addImm(Disc)
+        .addImm(/*shift=*/48);
+    } else {
+      BuildMI(MBB, MBBI, DL, TII->get(AArch64::MOVZXi), AArch64::X17)
+        .addImm(Disc)
+        .addImm(/*shift=*/0);
+    }
     DiscReg = AArch64::X17;
-    BuildMI(MBB, MBBI, DL, TII->get(AArch64::MOVZXi), AArch64::X17)
-      .addImm(Disc)
-      .addImm(0);
-  } else if (AddrDisc != AArch64::XZR) {
-    assert(Disc == 0 && "Non-0 discriminators should be folded into addr-disc");
-    DiscReg = AddrDisc;
   }
 
   unsigned PACOpc = getPACOpcodeForKey(Key, DiscReg == AArch64::XZR);
@@ -234,10 +305,22 @@ bool AArch64ExpandHardenedPseudos::expandMI(MachineInstr &MI) {
   if (DiscReg != AArch64::XZR)
     MIB.addReg(DiscReg);
 
+  // FIXME: transferImpOps ?
   MI.eraseFromParent();
   return true;
 }
 
+bool AArch64ExpandHardenedPseudos::expandMI(MachineInstr &MI) {
+  switch (MI.getOpcode()) {
+  case AArch64::BR_JumpTable:
+  case AArch64::LOADauthptrgot:
+  case AArch64::LOADgotPAC:
+  case AArch64::MOVaddrPAC:
+    return expandPtrAuthPseudo(MI);
+  default:
+    return false;
+  }
+}
 
 bool AArch64ExpandHardenedPseudos::runOnMachineFunction(MachineFunction &MF) {
   LLVM_DEBUG(dbgs() << "***** AArch64ExpandHardenedPseudos *****\n");

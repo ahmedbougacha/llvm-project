@@ -2952,7 +2952,8 @@ static void emitPtrAuthGlobalConstant(const DataLayout &DL,
     if (BaseCast)
       BaseGV = dyn_cast<GlobalVariable>(
           BaseCast->getPointerOperand()
-              ->stripAndAccumulateInBoundsConstantOffsets(DL, ComputedOffset));
+              ->stripAndAccumulateConstantOffsets(DL, ComputedOffset,
+                                                  /*AllowNonInbounds=*/true));
     if (!BaseGV || BaseCV != BaseGV || Offset != ComputedOffset.getZExtValue())
       GV->getContext().emitError(
           "Mismatched address discriminator in llvm.ptrauth global '" +
