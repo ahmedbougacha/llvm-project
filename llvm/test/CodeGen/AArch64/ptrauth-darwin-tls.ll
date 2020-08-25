@@ -1,4 +1,5 @@
 ; RUN: llc -mtriple=arm64e-apple-ios %s -o - | FileCheck %s
+; RUN: llc -mtriple=arm64e-apple-ios %s -o - -global-isel -global-isel-abort=1 -verify-machineinstrs | FileCheck %s
 
 @var = thread_local global i8 0
 
