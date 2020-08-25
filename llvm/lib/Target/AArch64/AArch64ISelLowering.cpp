@@ -7443,12 +7443,13 @@ SDValue AArch64TargetLowering::LowerRETURNADDR(SDValue Op,
 
   EVT VT = Op.getValueType();
   SDLoc DL(Op);
+  SDValue FrameAddr;
   unsigned Depth = cast<ConstantSDNode>(Op.getOperand(0))->getZExtValue();
   SDValue ReturnAddress;
   if (Depth) {
     SDNodeFlags Flags;
     Flags.setNoUnsignedWrap(true);
-    SDValue FrameAddr = LowerFRAMEADDR(Op, DAG);
+    FrameAddr = LowerFRAMEADDR(Op, DAG);
     SDValue Offset = DAG.getConstant(8, DL, getPointerTy(DAG.getDataLayout()));
     ReturnAddress = DAG.getLoad(
         VT, DL, DAG.getEntryNode(),
@@ -7460,12 +7461,10 @@ SDValue AArch64TargetLowering::LowerRETURNADDR(SDValue Op,
     ReturnAddress = DAG.getCopyFromReg(DAG.getEntryNode(), DL, Reg, VT);
   }
 
-  // If we're doing LR signing, we need to fixup ReturnAddr: strip it.
+  // If we're doing LR signing, we need to fixup ReturnAddress: strip it.
   if (MF.getFunction().hasFnAttribute("ptrauth-returns"))
-    return DAG.getNode(ISD::INTRINSIC_WO_CHAIN, DL, VT,
-                       DAG.getConstant(Intrinsic::ptrauth_strip, DL, MVT::i32),
-                       ReturnAddress,
-                       DAG.getConstant(AArch64PACKey::IB, DL, MVT::i32));
+    return SDValue(
+        DAG.getMachineNode(AArch64::XPACIuntied, DL, VT, ReturnAddress), 0);
   // If not, on Darwin, we know we will never seen a frame with a signed LR.
   else if (Subtarget->isTargetDarwin())
     return ReturnAddress;

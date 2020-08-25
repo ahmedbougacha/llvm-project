@@ -135,8 +135,6 @@ private:
                                       int &MinCSFrameIndex,
                                       int &MaxCSFrameIndex) const;
 
-  bool shouldAuthenticateLR(const MachineFunction &MF) const;
-
   MCCFIInstruction
   createDefCFAExpressionFromSP(const TargetRegisterInfo &TRI,
                                const StackOffset &OffsetFromSP) const;
@@ -145,6 +143,8 @@ private:
 
   bool shouldCombineCSRLocalStackBumpInEpilogue(MachineBasicBlock &MBB,
                                                 unsigned StackBumpBytes) const;
+
+  bool shouldAuthenticateLR(const MachineFunction &MF) const;
 };
 
 } // End llvm namespace
