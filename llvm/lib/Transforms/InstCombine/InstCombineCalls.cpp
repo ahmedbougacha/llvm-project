@@ -1974,7 +1974,7 @@ static IntrinsicInst *findInitTrampoline(Value *Callee) {
   return nullptr;
 }
 
-Instruction *InstCombinerImpl::tryCombinePtrAuthCall(CallBase &Call) {
+Instruction *InstCombinerImpl::tryCombinePtrAuthIntrinsic(CallBase &Call) {
   Value *Callee = Call.getCalledOperand();
   auto *IPC = dyn_cast<IntToPtrInst>(Callee);
   if (!IPC || !IPC->isNoopCast(DL))
@@ -2204,8 +2204,8 @@ Instruction *InstCombinerImpl::visitCallBase(CallBase &Call) {
   if (IntrinsicInst *II = findInitTrampoline(Callee))
     return transformCallThroughTrampoline(Call, *II);
 
-  // Combine calls involving pointer authentication
-  if (Instruction *NewCall = tryCombinePtrAuthCall(Call))
+  // Combine calls involving pointer authentication intrinsics.
+  if (Instruction *NewCall = tryCombinePtrAuthIntrinsic(Call))
     return NewCall;
 
 
