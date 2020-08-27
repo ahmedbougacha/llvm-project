@@ -127,20 +127,10 @@ unsigned AArch64InstrInfo::getInstSizeInBytes(const MachineInstr &MI) const {
     NumBytes = 4;
     break;
   case AArch64::AUT:
-    NumBytes = 24;
+    NumBytes = 32;
     break;
   case AArch64::AUTPAC:
-    NumBytes = 28;
-    break;
-  case AArch64::MOVaddrPAC:
-    // 12 fixed + 16 variable, for pointer offset, and discriminator
-    // We could potentially model the variable size overhead more accurately.
-    NumBytes = 28;
-    break;
-  case AArch64::BR_JumpTable:
-    // 28 fixed + 16 variable, for table size materialization
-    // We could potentially model the variable size overhead more accurately.
-    NumBytes = 44;
+    NumBytes = 48;
     break;
   case AArch64::JumpTableDest32:
   case AArch64::JumpTableDest16:

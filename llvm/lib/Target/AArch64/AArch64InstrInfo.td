@@ -1185,61 +1185,31 @@ let Predicates = [HasPAuth] in {
   // AUT pseudo.
   // This directly manipulates x16/x17, which are the only registers the OS
   // guarantees are safe to use for sensitive operations.
-  def AUT : Pseudo<(outs), (ins i32imm:$Key, GPR64all:$Rn), []>,
-            Sched<[WriteI, ReadI]> {
+  def AUT : Pseudo<(outs), (ins i32imm:$Key, i64imm:$Disc, GPR64noip:$AddrDisc),
+                   []>, Sched<[WriteI, ReadI]> {
     let isCodeGenOnly = 1;
     let hasSideEffects = 1;
     let mayStore = 0;
     let mayLoad = 0;
     let Defs = [X16,X17,NZCV];
-    let Uses = [X16,X17];
+    let Uses = [X16];
   }
 
   // AUT and re-PAC a value, using different keys/data.
   // This directly manipulates x16/x17, which are the only registers the OS
   // guarantees are safe to use for sensitive operations.
-  def AUTPAC : Pseudo<(outs), (ins i32imm:$AUTKey, GPR64:$AUTRn,
-                                   i32imm:$PACKey, GPR64:$PACRn), []>,
-               Sched<[WriteI, ReadI]> {
+  def AUTPAC
+      : Pseudo<(outs),
+               (ins i32imm:$AUTKey, i64imm:$AUTDisc, GPR64noip:$AUTAddrDisc,
+                    i32imm:$PACKey, i64imm:$PACDisc, GPR64noip:$PACAddrDisc),
+               []>, Sched<[WriteI, ReadI]> {
     let isCodeGenOnly = 1;
     let hasSideEffects = 1;
     let mayStore = 0;
     let mayLoad = 0;
     let Defs = [X16,X17,NZCV];
-    let Uses = [X16,X17];
+    let Uses = [X16];
   }
-
-  // Materialize a signed global address.
-  def MOVaddrPAC : Pseudo<(outs),
-                          (ins i64imm:$Addr, i64imm:$Offset, i32imm:$Key,
-                               GPR64:$AddrDisc, i64imm:$Disc), []>,
-               Sched<[WriteI, ReadI]> {
-    let isReMaterializable = 1;
-    let isCodeGenOnly = 1;
-    let Size = 28; // ranges from 12 to 28
-    let Defs = [X16,X17];
-    let Uses = [X16,X17];
-  }
-
-  let isCall = 1, isTerminator = 1, isReturn = 1, isBarrier = 1,
-      Uses = [SP] in {
-    def AUTH_TCRETURNriri : Pseudo<(outs), (ins tcGPR64:$dst, i32imm:$FPDiff,
-                                                i32imm:$Key, tcGPR64:$Rn),
-                                 []>, Sched<[WriteBrReg]>;
-    def AUTH_TCRETURNrii : Pseudo<(outs), (ins tcGPR64:$dst, i32imm:$FPDiff,
-                                                i32imm:$Key),
-                                 []>, Sched<[WriteBrReg]>;
-  }
-
-  def : Pat<(AArch64authtcret tcGPR64:$dst, (i32 timm:$FPDiff), (i32 timm:$Key),
-                              tcGPR64:$Rn),
-            (AUTH_TCRETURNriri tcGPR64:$dst, imm:$FPDiff, imm:$Key,
-                               tcGPR64:$Rn)>;
-
-  def : Pat<(AArch64authtcret tcGPR64:$dst, (i32 timm:$FPDiff), (i32 timm:$Key),
-                              (i64 0)),
-            (AUTH_TCRETURNrii tcGPR64:$dst, imm:$FPDiff, imm:$Key)>;
-
 }
 
 // v8.3a floating point conversion for javascript
