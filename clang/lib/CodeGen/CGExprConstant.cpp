@@ -779,8 +779,16 @@ bool ConstStructBuilder::Build(const APValue &Val, const RecordDecl *RD,
     // Add a vtable pointer, if we need one and it hasn't already been added.
     if (Layout.hasOwnVFPtr()) {
       llvm::Constant *VTableAddressPoint =
-          CGM.getCXXABI().getVTableAddressPointForConstExpr(
-              BaseSubobject(CD, Offset), VTableClass);
+          CGM.getCXXABI().getVTableAddressPoint(BaseSubobject(CD, Offset),
+                                                VTableClass);
+      if (auto authentication =
+              CGM.getVTablePointerAuthentication(VTableClass)) {
+        VTableAddressPoint = Emitter.tryEmitConstantSignedPointer(
+            VTableAddressPoint, *authentication);
+        if (!VTableAddressPoint) {
+          return false;
+        }
+      }
       if (!AppendBytes(Offset, VTableAddressPoint))
         return false;
     }
@@ -1366,7 +1374,7 @@ llvm::Constant *ConstantEmitter::tryEmitConstantExpr(const ConstantExpr *CE) {
   if (!CE->hasAPValueResult())
     return nullptr;
   const Expr *Inner = CE->getSubExpr()->IgnoreImplicit();
-  QualType RetType;
+  QualType RetType = CE->getType();
   if (auto *Call = dyn_cast<CallExpr>(Inner))
     RetType = Call->getCallReturnType(CGF->getContext());
   else if (auto *Ctor = dyn_cast<CXXConstructExpr>(Inner))
@@ -1709,6 +1717,40 @@ llvm::Constant *ConstantEmitter::tryEmitPrivateForMemory(const APValue &value,
   return (C ? emitForMemory(C, destType) : nullptr);
 }
 
+/// Try to emit a constant signed pointer, given a raw pointer and the
+/// destination ptrauth qualifier.
+///
+/// This can fail if the qualifier needs address discrimination and the
+/// emitter is in an abstract mode.
+llvm::Constant *
+ConstantEmitter::tryEmitConstantSignedPointer(llvm::Constant *unsignedPointer,
+                                              PointerAuthQualifier schema) {
+  assert(schema && "applying trivial ptrauth schema");
+  auto key = schema.getKey();
+
+  // Create an address placeholder if we're using address discrimination.
+  llvm::GlobalValue *storageAddress = nullptr;
+  if (schema.isAddressDiscriminated()) {
+    // We can't do this if the emitter is in an abstract state.
+    if (isAbstract())
+      return nullptr;
+
+    storageAddress = getCurrentAddrPrivate();
+  }
+
+  // Fetch the extra discriminator.
+  llvm::Constant *otherDiscriminator =
+      llvm::ConstantInt::get(CGM.IntPtrTy, schema.getExtraDiscriminator());
+
+  auto signedPointer = CGM.getConstantSignedPointer(
+      unsignedPointer, key, storageAddress, otherDiscriminator);
+
+  if (schema.isAddressDiscriminated())
+    registerCurrentAddrPrivate(signedPointer, storageAddress);
+
+  return signedPointer;
+}
+
 llvm::Constant *ConstantEmitter::emitForMemory(CodeGenModule &CGM,
                                                llvm::Constant *C,
                                                QualType destType) {
@@ -1824,8 +1866,6 @@ private:
   unsigned emitPointerAuthKey(const Expr *E);
   std::pair<llvm::Constant*, llvm::Constant*>
   emitPointerAuthDiscriminator(const Expr *E);
-  llvm::Constant *tryEmitConstantSignedPointer(llvm::Constant *ptr,
-                                               PointerAuthQualifier auth);
 
   bool hasNonZeroOffset() const {
     return !Value.getLValueOffset().isZero();
@@ -1852,6 +1892,12 @@ private:
   }
 };
 
+}
+
+static bool shouldSignPointer(const PointerAuthQualifier &qualifier) {
+  auto authenticationMode = qualifier.getAuthenticationMode();
+  return authenticationMode == PointerAuthenticationMode::SignAndStrip ||
+	authenticationMode == PointerAuthenticationMode::SignAndAuth;
 }
 
 llvm::Constant *ConstantLValueEmitter::tryEmit() {
@@ -1887,8 +1933,8 @@ llvm::Constant *ConstantLValueEmitter::tryEmit() {
 
   // Apply pointer-auth signing from the destination type.
   if (auto pointerAuth = DestType.getPointerAuth()) {
-    if (!result.HasDestPointerAuth) {
-      value = tryEmitConstantSignedPointer(value, pointerAuth);
+    if (!result.HasDestPointerAuth && shouldSignPointer(pointerAuth)) {
+      value = Emitter.tryEmitConstantSignedPointer(value, pointerAuth);
       if (!value) return nullptr;
     }
   }
@@ -1934,37 +1980,55 @@ ConstantLValueEmitter::tryEmitBase(const APValue::LValueBase &base) {
     if (D->hasAttr<WeakRefAttr>())
       return CGM.GetWeakRefReference(D).getPointer();
 
-    if (auto FD = dyn_cast<FunctionDecl>(D)) {
-      llvm::Constant *C = CGM.getRawFunctionPointer(FD);
+    auto PtrAuthSign = [&](llvm::Constant *C, bool IsFunction) {
       if (auto pointerAuth = DestType.getPointerAuth()) {
         C = applyOffset(C);
-        C = tryEmitConstantSignedPointer(C, pointerAuth);
+        C = Emitter.tryEmitConstantSignedPointer(C, pointerAuth);
         return ConstantLValue(C, /*applied offset*/ true, /*signed*/ true);
       }
 
-      if (CGPointerAuthInfo AuthInfo =
-              CGM.getFunctionPointerAuthInfo(DestType)) {
-        if (hasNonZeroOffset())
+      CGPointerAuthInfo AuthInfo;
+
+      if (IsFunction)
+        AuthInfo = CGM.getFunctionPointerAuthInfo(DestType);
+      else {
+        // FIXME: getPointerAuthInfoForType should be able to return the pointer
+        //        auth info of reference types.
+        if (auto *RT = DestType->getAs<ReferenceType>())
+          DestType = CGM.getContext().getPointerType(RT->getPointeeType());
+        // Don't emit a signed pointer if the destination is a function pointer type.
+        if (DestType->isSignableValue(CGM.getContext()) &&
+            !DestType->isFunctionPointerType())
+          AuthInfo = CGM.getPointerAuthInfoForType(DestType);
+      }
+
+      if (AuthInfo) {
+        if (IsFunction && hasNonZeroOffset())
           return ConstantLValue(nullptr);
+
+        C = applyOffset(C);
         C = CGM.getConstantSignedPointer(
-            C, AuthInfo.getKey(),
-            /*storageAddress=*/nullptr,
+            C, AuthInfo.getKey(), nullptr,
             cast_or_null<llvm::Constant>(AuthInfo.getDiscriminator()));
-        return ConstantLValue(C, /*AppliedOffset=*/true, /*Signed=*/true);
+        return ConstantLValue(C, /*applied offset*/ true, /*signed*/ true);
       }
 
       return ConstantLValue(C);
-    }
+    };
+
+    if (auto FD = dyn_cast<FunctionDecl>(D))
+      return PtrAuthSign(CGM.getRawFunctionPointer(FD), true);
 
     if (auto VD = dyn_cast<VarDecl>(D)) {
       // We can never refer to a variable with local storage.
       if (!VD->hasLocalStorage()) {
         if (VD->isFileVarDecl() || VD->hasExternalStorage())
-          return CGM.GetAddrOfGlobalVar(VD);
+          return PtrAuthSign(CGM.GetAddrOfGlobalVar(VD), false);
 
         if (VD->isLocalVarDecl()) {
-          return CGM.getOrCreateStaticVarDecl(
+          llvm::Constant *C = CGM.getOrCreateStaticVarDecl(
               *VD, CGM.getLLVMLinkageVarDefinition(VD, /*IsConstant=*/false));
+          return PtrAuthSign(C, false);
         }
       }
     }
@@ -2068,42 +2132,6 @@ ConstantLValueEmitter::VisitCallExpr(const CallExpr *E) {
   }
 }
 
-/// Try to emit a constant signed pointer, given a raw pointer and the
-/// destination ptrauth qualifier.
-///
-/// This can fail if the qualifier needs address discrimination and the
-/// emitter is in an abstract mode.
-llvm::Constant *
-ConstantLValueEmitter::tryEmitConstantSignedPointer(
-                                             llvm::Constant *unsignedPointer,
-                                             PointerAuthQualifier schema) {
-  assert(schema && "applying trivial ptrauth schema");
-  auto key = schema.getKey();
-
-  // Create an address placeholder if we're using address discrimination.
-  llvm::GlobalValue *storageAddress = nullptr;
-  if (schema.isAddressDiscriminated()) {
-    // We can't do this if the emitter is in an abstract state.
-    if (Emitter.isAbstract())
-      return nullptr;
-
-    storageAddress = Emitter.getCurrentAddrPrivate();
-  }
-
-  // Fetch the extra discriminator.
-  llvm::Constant *otherDiscriminator =
-    llvm::ConstantInt::get(CGM.IntPtrTy, schema.getExtraDiscriminator());
-
-  auto signedPointer =
-    CGM.getConstantSignedPointer(unsignedPointer, key, storageAddress,
-                                 otherDiscriminator);
-
-  if (schema.isAddressDiscriminated())
-    Emitter.registerCurrentAddrPrivate(signedPointer, storageAddress);
-
-  return signedPointer;
-}
-
 ConstantLValue
 ConstantLValueEmitter::emitPointerAuthSignConstant(const CallExpr *E) {
   auto unsignedPointer = emitPointerAuthPointer(E->getArg(0));
@@ -2203,6 +2231,9 @@ llvm::Constant *ConstantEmitter::tryEmitPrivate(const APValue &Value,
   case APValue::LValue:
     return ConstantLValueEmitter(*this, Value, DestType).tryEmit();
   case APValue::Int:
+    if (DestType.getPointerAuth() && Value.getInt() != 0) {
+      return nullptr;
+    }
     return llvm::ConstantInt::get(CGM.getLLVMContext(), Value.getInt());
   case APValue::FixedPoint:
     return llvm::ConstantInt::get(CGM.getLLVMContext(),

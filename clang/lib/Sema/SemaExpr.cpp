@@ -4013,8 +4013,9 @@ static bool CheckVecStepTraitOperandType(Sema &S, QualType T,
 static bool CheckPtrAuthTypeDiscriminatorOperandType(Sema &S, QualType T,
                                                      SourceLocation Loc,
                                                      SourceRange ArgRange) {
-  if (T->isVariablyModifiedType()) {
-    S.Diag(Loc, diag::err_ptrauth_type_disc_variably_modified) << T << ArgRange;
+  if (!T->isFunctionType() && !T->isFunctionPointerType() &&
+      !T->isFunctionReferenceType() && !T->isMemberFunctionPointerType()) {
+    S.Diag(Loc, diag::err_ptrauth_type_disc_undiscriminated) << T << ArgRange;
     return true;
   }
 

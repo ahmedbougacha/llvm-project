@@ -911,47 +911,50 @@ static void setPGOUseInstrumentor(CodeGenOptions &Opts,
     Opts.setProfileUse(CodeGenOptions::ProfileClangInstr);
 }
 
-static bool parsePointerAuthOptions(PointerAuthOptions &Opts,
-                                    ArgList &Args,
-                                    const LangOptions &LangOpts,
-                                    const llvm::Triple &Triple,
-                                    DiagnosticsEngine &Diags) {
-  if (!LangOpts.PointerAuthCalls && !LangOpts.PointerAuthReturns &&
-      !LangOpts.PointerAuthIndirectGotos && !LangOpts.PointerAuthAuthTraps)
-    return true;
-
+bool CompilerInvocation::setDefaultPointerAuthOptions(
+    PointerAuthOptions &Opts, const LangOptions &LangOpts,
+    const llvm::Triple &Triple) {
   if (LangOpts.SoftPointerAuth) {
     if (LangOpts.PointerAuthCalls) {
       using Key = PointerAuthSchema::SoftKey;
       using Discrimination = PointerAuthSchema::Discrimination;
       Opts.FunctionPointers =
-        PointerAuthSchema(Key::FunctionPointers, false, Discrimination::None);
-      Opts.BlockInvocationFunctionPointers =
-        PointerAuthSchema(Key::BlockInvocationFunctionPointers, true,
-                          Discrimination::None);
-      Opts.BlockHelperFunctionPointers =
-        PointerAuthSchema(Key::BlockHelperFunctionPointers, true,
-                          Discrimination::None);
-      Opts.BlockByrefHelperFunctionPointers =
-        PointerAuthSchema(Key::BlockHelperFunctionPointers, true,
-                          Discrimination::None);
-      Opts.ObjCMethodListFunctionPointers =
-        PointerAuthSchema(Key::ObjCMethodListFunctionPointers, true,
-                          Discrimination::None);
-      Opts.CXXVTablePointers =
-      Opts.CXXVTTVTablePointers =
-        PointerAuthSchema(Key::CXXVTablePointers, false,
-                          Discrimination::None);
+          PointerAuthSchema(Key::FunctionPointers, false,
+                            LangOpts.FunctionPointerTypeDiscrimination
+                                ? Discrimination::Type
+                                : Discrimination::None);
+      Opts.BlockInvocationFunctionPointers = PointerAuthSchema(
+          Key::BlockInvocationFunctionPointers, true, Discrimination::None);
+      Opts.BlockHelperFunctionPointers = PointerAuthSchema(
+          Key::BlockHelperFunctionPointers, true, Discrimination::None);
+      Opts.BlockByrefHelperFunctionPointers = PointerAuthSchema(
+          Key::BlockHelperFunctionPointers, true, Discrimination::None);
+      if (LangOpts.PointerAuthBlockDescriptorPointers) {
+        Opts.BlockDescriptorPointers = PointerAuthSchema(
+            Key::BlockDescriptorPointers, true, Discrimination::Constant,
+            BlockDescriptorConstantDiscriminator);
+      }
+      Opts.ObjCMethodListFunctionPointers = PointerAuthSchema(
+          Key::ObjCMethodListFunctionPointers, true, Discrimination::None);
+      Opts.ObjCMethodListPointer = PointerAuthSchema(
+          Key::ObjCMethodListPointer, true, Discrimination::Constant,
+          MethodListPointerConstantDiscriminator);
+      Opts.CXXVTablePointers = PointerAuthSchema(
+          Key::CXXVTablePointers,
+          LangOpts.PointerAuthVTPtrAddressDiscrimination,
+          LangOpts.PointerAuthVTPtrTypeDiscrimination ? Discrimination::Type
+                                                      : Discrimination::None);
+      Opts.CXXTypeInfoVTablePointer = PointerAuthSchema(
+          Key::CXXVTablePointers, false, Discrimination::None);
+      Opts.CXXVTTVTablePointers = PointerAuthSchema(
+          Key::CXXVTablePointers, false, Discrimination::None);
       Opts.CXXVirtualFunctionPointers =
-      Opts.CXXVirtualVariadicFunctionPointers =
-        PointerAuthSchema(Key::CXXVirtualFunctionPointers, true,
-                          Discrimination::Decl);
-      Opts.CXXMemberFunctionPointers =
-        PointerAuthSchema(Key::CXXMemberFunctionPointers, false,
-                          Discrimination::Type);
+          Opts.CXXVirtualVariadicFunctionPointers = PointerAuthSchema(
+              Key::CXXVirtualFunctionPointers, true, Discrimination::Decl);
+      Opts.CXXMemberFunctionPointers = PointerAuthSchema(
+          Key::CXXMemberFunctionPointers, false, Discrimination::Type);
       Opts.ThunkCXXVirtualMemberPointers = false;
     }
-
     Opts.ReturnAddresses = LangOpts.PointerAuthReturns;
     Opts.IndirectGotos = LangOpts.PointerAuthIndirectGotos;
     Opts.AuthTraps = LangOpts.PointerAuthAuthTraps;
@@ -964,32 +967,61 @@ static bool parsePointerAuthOptions(PointerAuthOptions &Opts,
       using Discrimination = PointerAuthSchema::Discrimination;
       // If you change anything here, be sure to update <ptrauth.h>.
       Opts.FunctionPointers =
-        PointerAuthSchema(Key::ASIA, false, Discrimination::None);
+          PointerAuthSchema(Key::ASIA, false,
+                            LangOpts.FunctionPointerTypeDiscrimination
+                                ? Discrimination::Type
+                                : Discrimination::None);
       Opts.BlockInvocationFunctionPointers =
-        PointerAuthSchema(Key::ASIA, true, Discrimination::None);
+          PointerAuthSchema(Key::ASIA, true, Discrimination::None);
       Opts.BlockHelperFunctionPointers =
-        PointerAuthSchema(Key::ASIA, true, Discrimination::None);
+          PointerAuthSchema(Key::ASIA, true, Discrimination::None);
       Opts.BlockByrefHelperFunctionPointers =
-        PointerAuthSchema(Key::ASIA, true, Discrimination::None);
+          PointerAuthSchema(Key::ASIA, true, Discrimination::None);
+      if (LangOpts.PointerAuthBlockDescriptorPointers) {
+        Opts.BlockDescriptorPointers =
+            PointerAuthSchema(Key::ASDA, true, Discrimination::Constant,
+                              BlockDescriptorConstantDiscriminator);
+      }
       Opts.ObjCMethodListFunctionPointers =
-        PointerAuthSchema(Key::ASIA, true, Discrimination::None);
-      Opts.CXXVTablePointers =
-        PointerAuthSchema(Key::ASDA, false, Discrimination::None);
+          PointerAuthSchema(Key::ASIA, true, Discrimination::None);
+      Opts.ObjCMethodListPointer =
+          PointerAuthSchema(Key::ASDA, true, Discrimination::Constant,
+                            MethodListPointerConstantDiscriminator);
+      Opts.CXXVTablePointers = PointerAuthSchema(
+          Key::ASDA, LangOpts.PointerAuthVTPtrAddressDiscrimination,
+          LangOpts.PointerAuthVTPtrTypeDiscrimination ? Discrimination::Type
+                                                      : Discrimination::None);
+      Opts.CXXTypeInfoVTablePointer =
+          PointerAuthSchema(Key::ASDA, false, Discrimination::None);
       Opts.CXXVTTVTablePointers =
-        PointerAuthSchema(Key::ASDA, false, Discrimination::None);
+          PointerAuthSchema(Key::ASDA, false, Discrimination::None);
       Opts.CXXVirtualFunctionPointers =
-      Opts.CXXVirtualVariadicFunctionPointers =
-        PointerAuthSchema(Key::ASIA, true, Discrimination::Decl);
+          Opts.CXXVirtualVariadicFunctionPointers =
+              PointerAuthSchema(Key::ASIA, true, Discrimination::Decl);
       Opts.CXXMemberFunctionPointers =
-        PointerAuthSchema(Key::ASIA, false, Discrimination::Type);
+          PointerAuthSchema(Key::ASIA, false, Discrimination::Type);
       Opts.ThunkCXXVirtualMemberPointers = false;
     }
-
     Opts.ReturnAddresses = LangOpts.PointerAuthReturns;
     Opts.IndirectGotos = LangOpts.PointerAuthIndirectGotos;
     Opts.AuthTraps = LangOpts.PointerAuthAuthTraps;
     return true;
   }
+
+  return false;
+}
+
+static bool parsePointerAuthOptions(PointerAuthOptions &Opts,
+                                    ArgList &Args,
+                                    const LangOptions &LangOpts,
+                                    const llvm::Triple &Triple,
+                                    DiagnosticsEngine &Diags) {
+  if (!LangOpts.PointerAuthCalls && !LangOpts.PointerAuthReturns &&
+      !LangOpts.PointerAuthIndirectGotos && !LangOpts.PointerAuthAuthTraps)
+    return true;
+
+  if (CompilerInvocation::setDefaultPointerAuthOptions(Opts, LangOpts, Triple))
+    return true;
 
   Diags.Report(diag::err_drv_ptrauth_not_supported)
     << Triple.str();
@@ -1378,8 +1410,9 @@ bool CompilerInvocation::ParseCodeGenArgs(CodeGenOptions &Opts, ArgList &Args,
 
   Opts.EmitVersionIdentMetadata = Args.hasFlag(OPT_Qy, OPT_Qn, true);
 
-  Success &=
-      parsePointerAuthOptions(Opts.PointerAuth, Args, LangOptsRef, T, Diags);
+  if (!LangOpts->CUDAIsDevice)
+    Success &= parsePointerAuthOptions(Opts.PointerAuth, Args, *LangOpts, T,
+                                       Diags);
 
   // -f[no-]split-cold-code
   // This may only be enabled when optimizing, and when small code size
@@ -2016,13 +2049,20 @@ static void ParseAPINotesArgs(APINotesOptions &Opts, ArgList &Args,
     Opts.ModuleSearchPaths.push_back(A->getValue());
 }
 
-static void ParsePointerAuthArgs(LangOptions &Opts, ArgList &Args) {
+static void ParsePointerAuthArgs(LangOptions &Opts, ArgList &Args,
+                                 DiagnosticsEngine &Diags) {
   Opts.PointerAuthIntrinsics = Args.hasArg(OPT_fptrauth_intrinsics);
   Opts.PointerAuthCalls = Args.hasArg(OPT_fptrauth_calls);
   Opts.PointerAuthReturns = Args.hasArg(OPT_fptrauth_returns);
   Opts.PointerAuthIndirectGotos = Args.hasArg(OPT_fptrauth_indirect_gotos);
   Opts.PointerAuthAuthTraps = Args.hasArg(OPT_fptrauth_auth_traps);
+  Opts.PointerAuthVTPtrAddressDiscrimination =
+      Args.hasArg(OPT_fptrauth_vtable_pointer_address_discrimination);
+  Opts.PointerAuthVTPtrTypeDiscrimination =
+      Args.hasArg(OPT_fptrauth_vtable_pointer_type_discrimination);
   Opts.SoftPointerAuth = Args.hasArg(OPT_fptrauth_soft);
+  Opts.PointerAuthBlockDescriptorPointers =
+      Args.hasArg(OPT_fptrauth_block_descriptor_pointers);
 }
 
 void CompilerInvocation::setLangDefaults(LangOptions &Opts, InputKind IK,
@@ -3074,7 +3114,8 @@ bool CompilerInvocation::CreateFromArgs(CompilerInvocation &Res,
   ParseHeaderSearchArgs(Res.getHeaderSearchOpts(), Args,
                         Res.getFileSystemOpts().WorkingDir);
   ParseAPINotesArgs(Res.getAPINotesOpts(), Args, Diags);
-  ParsePointerAuthArgs(LangOpts, Args);
+
+  ParsePointerAuthArgs(LangOpts, Args, Diags);
 
   if (DashX.getFormat() == InputKind::Precompiled ||
       DashX.getLanguage() == Language::LLVM_IR) {
@@ -3103,6 +3144,9 @@ bool CompilerInvocation::CreateFromArgs(CompilerInvocation &Res,
       Res.getDiagnosticOpts().Warnings.push_back("no-stdlibcxx-not-found");
     }
   }
+
+  LangOpts.FunctionPointerTypeDiscrimination = Args.hasArg(
+      OPT_fptrauth_function_pointer_type_discrimination);
 
   if (LangOpts.CUDA) {
     // During CUDA device-side compilation, the aux triple is the

@@ -57,13 +57,14 @@ void test_builtin_ptrauth_type_discriminator(unsigned s) {
   static_assert(dependentOperandDisc<decltype(&S::foo)>() == d);
   static_assert(__builtin_ptrauth_type_discriminator(void (S::*)(int)) == 39121);
   static_assert(__builtin_ptrauth_type_discriminator(void (S::*)(float)) == 52453);
-  static_assert(__builtin_ptrauth_type_discriminator(int *) == 42396);
+  static_assert(__builtin_ptrauth_type_discriminator(int (*())[s]) == 34128);
 
   int t;
   int vmarray[s];
   __builtin_ptrauth_type_discriminator(t); // expected-error {{unknown type name 't'}}
   __builtin_ptrauth_type_discriminator(&t); // expected-error {{expected a type}}
-  __builtin_ptrauth_type_discriminator(decltype(vmarray)); // expected-error {{cannot pass variably-modified type 'decltype(vmarray)'}}
+  __builtin_ptrauth_type_discriminator(decltype(vmarray)); // expected-error {{cannot pass undiscriminated type 'decltype(vmarray)' (aka 'int [s]')}}
+  __builtin_ptrauth_type_discriminator(int *); // expected-error {{cannot pass undiscriminated type 'int *' to '__builtin_ptrauth_type_discriminator'}}
 }
 
 void test_incomplete_virtual_member_function_return_arg_type() {

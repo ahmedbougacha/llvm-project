@@ -4178,6 +4178,12 @@ Optional<NullabilityKind> AttributedType::stripOuterNullability(QualType &T) {
   return None;
 }
 
+bool Type::isSignableInteger(const ASTContext &ctx) const {
+  if (!isIntegralType(ctx) || isEnumeralType())
+    return false;
+  return ctx.getTypeSize(this) == ctx.getTypeSize(ctx.VoidPtrTy);
+}
+
 bool Type::isBlockCompatibleObjCPointerType(ASTContext &ctx) const {
   const auto *objcPtr = getAs<ObjCObjectPointerType>();
   if (!objcPtr)

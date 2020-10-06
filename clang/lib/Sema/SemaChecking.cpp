@@ -1390,6 +1390,57 @@ bool Sema::checkConstantPointerAuthKey(Expr *Arg, unsigned &Result) {
   return false;
 }
 
+bool Sema::checkPointerAuthDiscriminatorArg(Expr *arg,
+                                            PointerAuthDiscArgKind kind,
+                                            unsigned &intVal) {
+  if (!arg) {
+    intVal = 0;
+    return true;
+  }
+
+  bool isPtrAuthStruct = kind == PADAK_TypeDiscPtrAuthStruct;
+
+  Optional<llvm::APSInt> result = arg->getIntegerConstantExpr(Context);
+  if (!result) {
+    Diag(arg->getExprLoc(), diag::err_ptrauth_arg_not_ice) << isPtrAuthStruct;
+    return false;
+  }
+
+  unsigned max;
+  bool isAddrDiscArg = false;
+
+  switch (kind) {
+  case PADAK_AddrDiscPtrAuth:
+    max = 1;
+    isAddrDiscArg = true;
+    break;
+  case PADAK_ExtraDiscPtrAuth:
+  case PADAK_TypeDiscPtrAuthStruct:
+    max = PointerAuthQualifier::MaxDiscriminator;
+    break;
+  };
+
+  if (*result < 0 || *result > max) {
+    llvm::SmallString<32> value;
+    {
+      llvm::raw_svector_ostream str(value);
+      str << *result;
+    }
+
+    if (isAddrDiscArg)
+      Diag(arg->getExprLoc(), diag::err_ptrauth_address_discrimination_invalid)
+          << value;
+    else
+      Diag(arg->getExprLoc(), diag::err_ptrauth_extra_discriminator_invalid)
+          << value << max << isPtrAuthStruct;
+
+    return false;
+  };
+
+  intVal = result->getZExtValue();
+  return true;
+}
+
 static std::pair<const ValueDecl *, CharUnits>
 findConstantBaseAndOffset(Sema &S, Expr *E) {
   // Must evaluate as a pointer.
@@ -1619,7 +1670,6 @@ static ExprResult SemaPointerAuthStringDiscriminator(Sema &S, CallExpr *call) {
 
   return call;
 }
-
 
 static ExprResult SemaBuiltinLaunder(Sema &S, CallExpr *TheCall) {
   if (checkArgCount(S, TheCall, 1))

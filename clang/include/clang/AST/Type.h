@@ -25,6 +25,7 @@
 #include "clang/Basic/Diagnostic.h"
 #include "clang/Basic/ExceptionSpecificationType.h"
 #include "clang/Basic/LLVM.h"
+#include "clang/Basic/LangOptions.h"
 #include "clang/Basic/Linkage.h"
 #include "clang/Basic/PartialDiagnostic.h"
 #include "clang/Basic/SourceLocation.h"
@@ -144,17 +145,36 @@ class PointerAuthQualifier {
     EnabledMask = 1 << EnabledShift,
     AddressDiscriminatedShift = EnabledShift + EnabledBits,
     AddressDiscriminatedBits = 1,
-    AddressDiscriminatedMask = 1 << AddressDiscriminatedBits,
-    KeyShift = AddressDiscriminatedShift + AddressDiscriminatedBits,
-    KeyBits = 14,
+    AddressDiscriminatedMask = 1 << AddressDiscriminatedShift,
+    AuthenticationModeShift =
+        AddressDiscriminatedShift + AddressDiscriminatedBits,
+    AuthenticationModeBits = 2,
+    AuthenticationModeMask = ((1 << AuthenticationModeBits) - 1)
+                             << AuthenticationModeShift,
+    KeyShift = AuthenticationModeShift + AuthenticationModeBits,
+    KeyBits = 12,
     KeyMask = ((1 << KeyBits) - 1) << KeyShift,
     DiscriminatorShift = KeyShift + KeyBits,
-    DiscriminatorBits = 16
+    DiscriminatorBits = 16,
+    DiscriminatorMask = ((1 << DiscriminatorBits) - 1) << DiscriminatorShift,
   };
 
-  // bits:     |0      |1      |2..15|16   ...   31|
-  //           |Enabled|Address|Key  |Discriminator|
+  // bits:     |0      |1      |2..3              |4..15|16   ...   31|
+  //           |Enabled|Address|AuthenticationMode|Key  |Discriminator|
   uint32_t Data;
+
+  static_assert((EnabledBits + AddressDiscriminatedBits +
+                 AuthenticationModeBits + KeyBits +
+                 DiscriminatorBits) == 32,
+                "PointerAuthQualifier should be exactly 32 bits");
+  static_assert((EnabledMask + AddressDiscriminatedMask +
+                 AuthenticationModeMask + KeyMask +
+                 DiscriminatorMask) == 0xFFFFFFFF,
+                "All masks should cover the entire bits");
+  static_assert((EnabledMask ^ AddressDiscriminatedMask ^
+                 AuthenticationModeMask ^ KeyMask ^
+                 DiscriminatorMask) == 0xFFFFFFFF,
+                "All masks should cover the entire bits");
 
 public:
   enum {
@@ -168,17 +188,19 @@ public:
 public:
   PointerAuthQualifier() : Data(0) {}
   PointerAuthQualifier(unsigned key, bool isAddressDiscriminated,
-                       unsigned extraDiscriminator)
-    : Data(EnabledMask
-           | (isAddressDiscriminated ? AddressDiscriminatedMask : 0)
-           | (key << KeyShift)
-           | (extraDiscriminator << DiscriminatorShift)) {
+                       unsigned extraDiscriminator,
+                       PointerAuthenticationMode authenticationMode)
+      : Data(EnabledMask |
+             (isAddressDiscriminated ? AddressDiscriminatedMask : 0) |
+             (key << KeyShift) |
+             (unsigned(authenticationMode) << AuthenticationModeShift) |
+             (extraDiscriminator << DiscriminatorShift)) {
     assert(key <= MaxKey);
     assert(extraDiscriminator <= MaxDiscriminator);
   }
 
   bool isPresent() const {
-    return Data != 0;
+    return getAuthenticationMode() != PointerAuthenticationMode::None;
   }
 
   explicit operator bool() const {
@@ -198,6 +220,11 @@ public:
   unsigned getExtraDiscriminator() const {
     assert(isPresent());
     return (Data >> DiscriminatorShift);
+  }
+
+  PointerAuthenticationMode getAuthenticationMode() const {
+    return PointerAuthenticationMode((Data & AuthenticationModeMask) >>
+                                     AuthenticationModeShift);
   }
 
   friend bool operator==(PointerAuthQualifier lhs, PointerAuthQualifier rhs) {
@@ -716,7 +743,8 @@ private:
   uint32_t Mask = 0;
 
   PointerAuthQualifier PtrAuth;
-
+  static_assert(sizeof(PointerAuthQualifier) == sizeof(uint32_t),
+                "PointerAuthQualifier must be 32 bits");
   static const uint32_t UMask = 0x8;
   static const uint32_t UShift = 3;
   static const uint32_t GCAttrMask = 0x30;
@@ -2149,6 +2177,9 @@ public:
   bool isFunctionNoProtoType() const { return getAs<FunctionNoProtoType>(); }
   bool isFunctionProtoType() const { return getAs<FunctionProtoType>(); }
   bool isPointerType() const;
+  bool isSignablePointerType() const;
+  bool isSignableInteger(const ASTContext &) const;
+  bool isSignableValue(ASTContext &) const;
   bool isAnyPointerType() const;   // Any C pointer or ObjC object pointer
   bool isBlockPointerType() const;
   bool isVoidPointerType() const;
@@ -6812,6 +6843,14 @@ inline bool Type::isPointerType() const {
 
 inline bool Type::isAnyPointerType() const {
   return isPointerType() || isObjCObjectPointerType();
+}
+
+inline bool Type::isSignablePointerType() const {
+  return isPointerType() || isObjCClassType() || isObjCQualifiedClassType();
+}
+
+inline bool Type::isSignableValue(ASTContext &ctx) const {
+  return isSignablePointerType() || isSignableInteger(ctx);
 }
 
 inline bool Type::isBlockPointerType() const {

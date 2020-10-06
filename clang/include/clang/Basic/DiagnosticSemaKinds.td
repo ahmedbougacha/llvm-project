@@ -790,34 +790,62 @@ def warn_ptrauth_auth_null_pointer :
   InGroup<PtrAuthNullPointers>;
 def err_ptrauth_string_not_literal : Error<
   "argument must be a string literal%select{| of char type}0">;
-def err_ptrauth_type_disc_variably_modified : Error<
-   "cannot pass variably-modified type %0 to "
-   "'__builtin_ptrauth_type_discriminator'">;
 def note_ptrauth_virtual_function_pointer_incomplete_arg_ret :
   Note<"cannot take an address of a virtual member function if its return or "
        "argument types are incomplete">;
 def note_ptrauth_virtual_function_incomplete_arg_ret_type :
   Note<"%0 is incomplete">;
+def err_ptrauth_type_disc_undiscriminated : Error<
+  "cannot pass undiscriminated type %0 to "
+  "'__builtin_ptrauth_type_discriminator'">;
+def err_ptrauth_struct_signing_mismatch : Error<
+  "%0 is signed differently from the previous declaration">;
+def note_previous_ptrauth_struct_declaration : Note<
+  "previous declaration of %0 is here">;
+def err_ptrauth_invalid_struct_attr_dynamic_class : Error<
+  "attribute ptrauth_struct cannot be used on class %0 because it is a "
+  "dynamic class">;
+def err_ptrauth_discriminator_mismatch_derived_class : Error<
+  "key or discriminator of class %0 doesn't match that of base class %1">;
+def err_ptrauth_non_string_authentication_option : Error<
+  "__ptrauth options must be a string of comma separated flags, found %0">;
+def err_ptrauth_unknown_authentication_option : Error<
+  "unknown __ptrauth authentication option %0">;
+def err_ptrauth_repeated_authentication_option : Error<
+  "repeated __ptrauth authentication %select{mode|option}0">;
+def note_ptrauth_previous_authentication_option : Note<
+  "previous __ptrauth authentication %select{mode|option}0">;
+def err_ptrauth_empty_authentication_option : Error<
+  "empty __ptrauth authentication option">;
+def err_ptrauth_invalid_option_character : Error<
+  "invalid character in __ptrauth options">;
+def err_ptrauth_invalid_option_missing_comma : Error<
+  "missing comma between __ptrauth options"
+>;
 
 // __ptrauth qualifier
 def err_ptrauth_qualifier_return : Error<
-  "return types may not be qualified with __ptrauth; type is %0">;
+  "return types may not be qualified with %select{__ptrauth|__ptrauth_restricted_intptr}1; type is %0">;
 def err_ptrauth_qualifier_param : Error<
-  "parameter types may not be qualified with __ptrauth; type is %0">;
+  "parameter types may not be qualified with %select{__ptrauth|__ptrauth_restricted_intptr}1; type is %0">;
 def err_ptrauth_qualifier_cast : Error<
   "cast types may not be qualified with __ptrauth; type is %0">;
+def err_ptrauth_restricted_intptr_qualifier_pointer : Error<
+  "__ptrauth_restricted_intptr qualifier may only be applied to pointer sized integer types; type here is %0">;
 def err_ptrauth_qualifier_nonpointer : Error<
   "__ptrauth qualifier may only be applied to pointer types; type here is %0">;
 def err_ptrauth_qualifier_redundant : Error<
-  "type %0 is already __ptrauth-qualified">;
+  "type %0 is already %1-qualified">;
 def err_ptrauth_qualifier_bad_arg_count : Error<
-  "__ptrauth qualifier must take between 1 and 3 arguments">;
-def err_ptrauth_qualifier_arg_not_ice : Error<
-  "argument to __ptrauth must be an integer constant expression">;
-def err_ptrauth_qualifier_address_discrimination_invalid : Error<
+  "%0 qualifier must take between 1 and 4 arguments">;
+def err_ptrauth_arg_not_ice : Error<
+  "argument to %select{__ptrauth|ptrauth_struct}0 must be an integer constant "
+  "expression">;
+def err_ptrauth_address_discrimination_invalid : Error<
   "address discrimination flag for __ptrauth must be 0 or 1; value is %0">;
-def err_ptrauth_qualifier_extra_discriminator_invalid : Error<
-  "extra discriminator for __ptrauth must be between 0 and %1; value is %0">;
+def err_ptrauth_extra_discriminator_invalid : Error<
+  "extra discriminator for %select{__ptrauth|ptrauth_struct}2 must be between "
+  "0 and %1; value is %0">;
 
 /// main()
 // static main() is not an error in C, just in C++.
@@ -11179,6 +11207,7 @@ def err_bit_cast_non_trivially_copyable : Error<
 def err_bit_cast_type_size_mismatch : Error<
   "__builtin_bit_cast source size does not equal destination size (%0 vs %1)">;
 
+
 // SYCL-specific diagnostics
 def warn_sycl_kernel_num_of_template_params : Warning<
   "'sycl_kernel' attribute only applies to a function template with at least"
@@ -11192,6 +11221,30 @@ def warn_sycl_kernel_num_of_function_params : Warning<
 def warn_sycl_kernel_return_type : Warning<
   "function template with 'sycl_kernel' attribute must have a 'void' return type">,
   InGroup<IgnoredAttributes>;
+
+// VTable pointer authentication errors
+def err_non_polymorphic_vtable_pointer_auth : Error<
+  "cannot set vtable pointer authentication on monomorphic type %0">;
+def err_incomplete_type_vtable_pointer_auth : Error<
+  "cannot set vtable pointer authentication on an incomplete type %0">;
+def err_non_top_level_vtable_pointer_auth : Error<
+  "cannot set vtable pointer authentication on %0 which is a subclass of polymorphic type %1">;
+def err_duplicated_vtable_pointer_auth : Error<
+  "multiple vtable pointer authentication policies on %0">;
+def err_invalid_authentication_key : Error<
+  "invalid authentication key %0">;
+def err_invalid_address_discrimination : Error<
+  "invalid address discrimination mode %0">;
+def err_invalid_extra_discrimination : Error<
+  "invalid extra discrimination selection %0">;
+def err_invalid_custom_discrimination : Error<
+  "invalid custom discrimination">;
+def err_missing_custom_discrimination : Error<
+  "missing custom discrimination">;
+def err_no_default_vtable_pointer_auth : Error<
+  "cannot specify a default vtable pointer authentication "
+  "%select{key|address discrimination mode|discriminator}0 with no default set"
+>;
 
 def err_ext_int_bad_size : Error<"%select{signed|unsigned}0 _ExtInt must "
                                  "have a bit size of at least %select{2|1}0">;

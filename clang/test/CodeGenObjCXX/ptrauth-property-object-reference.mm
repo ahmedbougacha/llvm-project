@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 %s -triple arm64-apple-ios11.0 -fobjc-runtime=ios-11.0 -fptrauth-calls -emit-llvm -o - | FileCheck %s
+// RUN: %clang_cc1 -fptrauth-function-pointer-type-discrimination %s -triple arm64-apple-ios11.0 -fobjc-runtime=ios-11.0 -fptrauth-calls -emit-llvm -o - | FileCheck %s
 
 extern int DEFAULT();
 
@@ -27,9 +27,9 @@ struct TCPPObject
   @synthesize MyProperty1 = _cppObject1;
 @end
 
-// CHECK-LABEL: @__copy_helper_atomic_property_.ptrauth = private constant { i8*, i32, i64, i64 } { i8* bitcast (void (%struct.TCPPObject*, %struct.TCPPObject*)* @__copy_helper_atomic_property_ to i8*), i32 0, i64 0, i64 0 }, section "llvm.ptrauth", align 8
+// CHECK-LABEL: @__copy_helper_atomic_property_.ptrauth = private constant { i8*, i32, i64, i64 } { i8* bitcast (void (%struct.TCPPObject*, %struct.TCPPObject*)* @__copy_helper_atomic_property_ to i8*), i32 0, i64 0, i64 29656 }, section "llvm.ptrauth", align 8
 
-// CHECK-LABEL: @__assign_helper_atomic_property_.ptrauth = private constant { i8*, i32, i64, i64 } { i8* bitcast (void (%struct.TCPPObject*, %struct.TCPPObject*)* @__assign_helper_atomic_property_ to i8*), i32 0, i64 0, i64 0 }, section "llvm.ptrauth", align 8
+// CHECK-LABEL: @__assign_helper_atomic_property_.ptrauth = private constant { i8*, i32, i64, i64 } { i8* bitcast (void (%struct.TCPPObject*, %struct.TCPPObject*)* @__assign_helper_atomic_property_ to i8*), i32 0, i64 0, i64 29656 }, section "llvm.ptrauth", align 8
 
 // CHECK-LABEL: define internal void @__copy_helper_atomic_property_(%struct.TCPPObject* %0, %struct.TCPPObject* %1) #
 // CHECK: [[TWO:%.*]] = load %struct.TCPPObject*, %struct.TCPPObject** [[ADDR:%.*]], align 8

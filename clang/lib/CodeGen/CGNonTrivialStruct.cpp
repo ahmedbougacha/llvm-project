@@ -378,7 +378,7 @@ template <class Derived> struct GenFuncBase {
         CGF.Builder.CreateNUWMul(BaseEltSizeVal, NumElts);
     Address BC = CGF.Builder.CreateBitCast(DstAddr, CGF.CGM.Int8PtrTy);
     llvm::Value *DstArrayEnd =
-        CGF.Builder.CreateInBoundsGEP(BC.getPointer(), SizeInBytes);
+        CGF.Builder.CreateInBoundsGEP(BC.getRawPointer(CGF), SizeInBytes);
     DstArrayEnd = CGF.Builder.CreateBitCast(DstArrayEnd, CGF.CGM.Int8PtrPtrTy,
                                             "dstarray.end");
     llvm::BasicBlock *PreheaderBB = CGF.Builder.GetInsertBlock();
@@ -390,7 +390,7 @@ template <class Derived> struct GenFuncBase {
 
     for (unsigned I = 0; I < N; ++I) {
       PHIs[I] = CGF.Builder.CreatePHI(CGF.CGM.Int8PtrPtrTy, 2, "addr.cur");
-      PHIs[I]->addIncoming(StartAddrs[I].getPointer(), PreheaderBB);
+      PHIs[I]->addIncoming(StartAddrs[I].getRawPointer(CGF), PreheaderBB);
     }
 
     // Create the exit and loop body blocks.
@@ -423,7 +423,7 @@ template <class Derived> struct GenFuncBase {
       // Instrs to update the destination and source addresses.
       // Update phi instructions.
       NewAddrs[I] = getAddrWithOffset(NewAddrs[I], EltSize);
-      PHIs[I]->addIncoming(NewAddrs[I].getPointer(), LoopBB);
+      PHIs[I]->addIncoming(NewAddrs[I].getRawPointer(CGF), LoopBB);
     }
 
     // Insert an unconditional branch to the header block.
@@ -507,7 +507,7 @@ template <class Derived> struct GenFuncBase {
       Alignments[I] = Addrs[I].getAlignment();
       Ptrs[I] =
           CallerCGF.Builder.CreateBitCast(Addrs[I], CallerCGF.CGM.Int8PtrPtrTy)
-              .getPointer();
+              .getRawPointer(CallerCGF);
     }
 
     if (llvm::Function *F =

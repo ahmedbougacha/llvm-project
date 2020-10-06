@@ -14,6 +14,7 @@
 #ifndef LLVM_CLANG_LIB_CODEGEN_CGCALL_H
 #define LLVM_CLANG_LIB_CODEGEN_CGCALL_H
 
+#include "CGPointerAuthInfo.h"
 #include "CGValue.h"
 #include "EHScopeStack.h"
 #include "clang/AST/ASTFwd.h"
@@ -61,36 +62,6 @@ public:
     return CalleeProtoTy;
   }
   const GlobalDecl getCalleeDecl() const { return CalleeDecl; }
-};
-
-/// Information necessary for pointer authentication.
-class CGPointerAuthInfo {
-  unsigned Signed : 1;
-  unsigned Key : 31;
-  llvm::Value *Discriminator;
-
-public:
-  CGPointerAuthInfo() { Signed = false; }
-  CGPointerAuthInfo(unsigned key, llvm::Value *discriminator)
-      : Discriminator(discriminator) {
-    assert(!discriminator || discriminator->getType()->isIntegerTy() ||
-           discriminator->getType()->isPointerTy());
-    Signed = true;
-    Key = key;
-  }
-
-  explicit operator bool() const { return isSigned(); }
-
-  bool isSigned() const { return Signed; }
-
-  unsigned getKey() const {
-    assert(isSigned());
-    return Key;
-  }
-  llvm::Value *getDiscriminator() const {
-    assert(isSigned());
-    return Discriminator;
-  }
 };
 
 /// All available information about a concrete callee.
@@ -278,6 +249,16 @@ public:
       : RV(rv), HasLV(false), IsUsed(false), Ty(ty) {}
   CallArg(LValue lv, QualType ty)
       : LV(lv), HasLV(true), IsUsed(false), Ty(ty) {}
+  CallArg &operator=(const CallArg &Other) {
+    if (Other.HasLV)
+      LV = Other.LV;
+    else
+      RV = Other.RV;
+    HasLV = Other.HasLV;
+    IsUsed = Other.IsUsed;
+    Ty = Other.Ty;
+    return *this;
+  }
   bool hasLValue() const { return HasLV; }
   QualType getType() const { return Ty; }
 
@@ -424,6 +405,7 @@ public:
   Address getValue() const { return Addr; }
   bool isUnused() const { return IsUnused; }
   bool isExternallyDestructed() const { return IsExternallyDestructed; }
+  Address getAddress() const { return Addr; }
 };
 
 } // end namespace CodeGen

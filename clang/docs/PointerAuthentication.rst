@@ -223,6 +223,17 @@ If ``x`` is an object of type ``__ptrauth(key, address, discriminator) T``, then
 
 - if ``address`` is 1 and ``discriminator`` is non-zero, then the discriminator is ``ptrauth_blend_discriminator(&x, discriminator)``; see `ptrauth_blend_discriminator`_.
 
+__ptrauth_restricted_intptr qualifier
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+This is a variant of the ``__ptrauth`` qualifier, that applies to pointer sized integers.
+See the documentation for ``__ptrauth qualifier``.
+
+This feature exists to support older APIs that use [u]intptrs to hold opaque pointer types.
+
+Care must be taken to avoid using the signature bit components of the signed integers or subsequent authentication of the signed value may fail.
+
+Note: When applied to a global initialiser a signed uintptr can only be initialised with the value 0 or a global address.
+
 Non-triviality from address diversity
 +++++++++++++++++++++++++++++++++++++
 

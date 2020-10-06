@@ -1,6 +1,6 @@
-// RUN: %clang_cc1 -triple arm64-apple-ios -fptrauth-calls -fptrauth-intrinsics -emit-llvm %s  -o - | FileCheck -check-prefix=CHECK -check-prefix=NOPCH %s
-// RUN: %clang_cc1 -triple arm64-apple-ios -fptrauth-calls -fptrauth-intrinsics -emit-pch %s -o %t.ast
-// RUN: %clang_cc1 -triple arm64-apple-ios -fptrauth-calls -fptrauth-intrinsics -emit-llvm -x ast -o - %t.ast | FileCheck -check-prefix=CHECK -check-prefix=PCH %s
+// RUN: %clang_cc1 -fptrauth-function-pointer-type-discrimination -triple arm64-apple-ios -fptrauth-calls -fptrauth-intrinsics -emit-llvm %s  -o - | FileCheck -check-prefix=CHECK -check-prefix=NOPCH %s
+// RUN: %clang_cc1 -fptrauth-function-pointer-type-discrimination -triple arm64-apple-ios -fptrauth-calls -fptrauth-intrinsics -emit-pch %s -o %t.ast
+// RUN: %clang_cc1 -fptrauth-function-pointer-type-discrimination -triple arm64-apple-ios -fptrauth-calls -fptrauth-intrinsics -emit-llvm -x ast -o - %t.ast | FileCheck -check-prefix=CHECK -check-prefix=PCH %s
 
 #define FNPTRKEY 0
 
@@ -8,7 +8,7 @@ void (*fnptr)(void);
 long discriminator;
 
 extern void external_function(void);
-// CHECK: [[EXTERNAL_FUNCTION:@.*]] = private constant { i8*, i32, i64, i64 } { i8* bitcast (void ()* @external_function to i8*), i32 0, i64 0, i64 0 }, section "llvm.ptrauth", align 8
+// CHECK: [[EXTERNAL_FUNCTION:@.*]] = private constant { i8*, i32, i64, i64 } { i8* bitcast (void ()* @external_function to i8*), i32 0, i64 0, i64 18983 }, section "llvm.ptrauth", align 8
 // CHECK: @fptr1 = {{.*}} global void ()* bitcast ({ i8*, i32, i64, i64 }* [[EXTERNAL_FUNCTION]] to void ()*)
 void (*fptr1)(void) = external_function;
 // CHECK: @fptr2 = {{.*}} global void ()* bitcast ({ i8*, i32, i64, i64 }* [[EXTERNAL_FUNCTION]] to void ()*)
@@ -25,7 +25,7 @@ void (*fptr4)(void) = __builtin_ptrauth_sign_constant(&external_function, 2, __b
 // CHECK-LABEL: define {{.*}} void @test_call()
 void test_call() {
   // CHECK:      [[T0:%.*]] = load void ()*, void ()** @fnptr,
-  // CHECK-NEXT: call void [[T0]]() [ "ptrauth"(i32 0, i64 0) ]
+  // CHECK-NEXT: call void [[T0]]() [ "ptrauth"(i32 0, i64 18983) ]
   fnptr();
 }
 
@@ -47,7 +47,7 @@ void test_sign_unauthenticated_peephole() {
   // CHECK:      [[T0:%.*]] = load void ()*, void ()** @fnptr,
   // CHECK-NEXT: call void [[T0]](){{$}}
   // CHECK-NEXT: ret void
-  __builtin_ptrauth_sign_unauthenticated(fnptr, FNPTRKEY, 0)();
+  __builtin_ptrauth_sign_unauthenticated(fnptr, FNPTRKEY, 18983)();
 }
 
 // This peephole doesn't kick in because it's incorrect when ABI pointer
@@ -57,9 +57,9 @@ void test_auth_peephole() {
   // CHECK:      [[T0:%.*]] = load void ()*, void ()** @fnptr,
   // CHECK-NEXT: [[T1:%.*]] = load i64, i64* @discriminator,
   // CHECK-NEXT: [[T2:%.*]] = ptrtoint void ()* [[T0]] to i64
-  // CHECK-NEXT: [[T3:%.*]] = call i64 @llvm.ptrauth.auth.i64(i64 [[T2]], i32 0, i64 [[T1]])
+  // CHECK-NEXT: [[T3:%.*]] = call i64 @llvm.ptrauth.auth(i64 [[T2]], i32 0, i64 [[T1]])
   // CHECK-NEXT: [[T4:%.*]] = inttoptr  i64 [[T3]] to void ()*
-  // CHECK-NEXT: call void [[T4]]() [ "ptrauth"(i32 0, i64 0) ]
+  // CHECK-NEXT: call void [[T4]]() [ "ptrauth"(i32 0, i64 18983) ]
   // CHECK-NEXT: ret void
   __builtin_ptrauth_auth(fnptr, 0, discriminator)();
 }
@@ -70,7 +70,7 @@ void test_auth_and_resign_peephole() {
   // CHECK-NEXT: [[T1:%.*]] = load i64, i64* @discriminator,
   // CHECK-NEXT: call void [[T0]]() [ "ptrauth"(i32 2, i64 [[T1]]) ]
   // CHECK-NEXT: ret void
-  __builtin_ptrauth_auth_and_resign(fnptr, 2, discriminator, FNPTRKEY, 0)();
+  __builtin_ptrauth_auth_and_resign(fnptr, 2, discriminator, FNPTRKEY, 18983)();
 }
 
 // CHECK-LABEL: define {{.*}} void ()* @test_function_pointer()

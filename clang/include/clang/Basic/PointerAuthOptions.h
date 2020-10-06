@@ -15,15 +15,24 @@
 #define LLVM_CLANG_BASIC_POINTERAUTHOPTIONS_H
 
 #include "clang/Basic/LLVM.h"
+#include "clang/Basic/LangOptions.h"
 #include "llvm/ADT/Optional.h"
+#include "llvm/Support/ErrorHandling.h"
 #include "llvm/Target/TargetOptions.h"
 #include <map>
 #include <memory>
 #include <string>
 #include <vector>
-#include "llvm/Support/ErrorHandling.h"
 
 namespace clang {
+
+/// Constant discriminator to be used with method list pointers. The value is
+/// ptrauth_string_discriminator("method_list_t")
+constexpr uint16_t MethodListPointerConstantDiscriminator = 0xC310;
+
+/// Constant discriminator to be used with block descriptor pointers. The value
+/// is ptrauth_string_discriminator("block_descriptor")
+constexpr uint16_t BlockDescriptorConstantDiscriminator = 0xC0BB;
 
 class PointerAuthSchema {
 public:
@@ -43,6 +52,8 @@ public:
     CXXVTablePointers = 4,
     CXXVirtualFunctionPointers = 5,
     CXXMemberFunctionPointers = 6,
+    ObjCMethodListPointer = 7,
+    BlockDescriptorPointers = 8,
   };
 
   /// Hardware pointer-signing keys in ARM8.3.
@@ -73,17 +84,20 @@ public:
 private:
   Kind TheKind : 2;
   unsigned IsAddressDiscriminated : 1;
+  PointerAuthenticationMode SelectedAuthenticationMode : 2;
   Discrimination DiscriminationKind : 2;
-  unsigned Key : 3;
+  unsigned Key : 4;
   unsigned ConstantDiscriminator : 16;
 
 public:
   PointerAuthSchema() : TheKind(Kind::None) {}
 
   PointerAuthSchema(SoftKey key, bool isAddressDiscriminated,
+                    PointerAuthenticationMode authenticationMode,
                     Discrimination otherDiscrimination,
                     Optional<uint16_t> constantDiscriminator = None)
       : TheKind(Kind::Soft), IsAddressDiscriminated(isAddressDiscriminated),
+        SelectedAuthenticationMode(authenticationMode),
         DiscriminationKind(otherDiscrimination), Key(unsigned(key)) {
     assert((getOtherDiscrimination() != Discrimination::Constant ||
             constantDiscriminator) &&
@@ -93,9 +107,11 @@ public:
   }
 
   PointerAuthSchema(ARM8_3Key key, bool isAddressDiscriminated,
+                    PointerAuthenticationMode authenticationMode,
                     Discrimination otherDiscrimination,
                     Optional<uint16_t> constantDiscriminator = None)
       : TheKind(Kind::ARM8_3), IsAddressDiscriminated(isAddressDiscriminated),
+        SelectedAuthenticationMode(authenticationMode),
         DiscriminationKind(otherDiscrimination), Key(unsigned(key)) {
     assert((getOtherDiscrimination() != Discrimination::Constant ||
             constantDiscriminator) &&
@@ -103,6 +119,20 @@ public:
     if (constantDiscriminator)
       ConstantDiscriminator = *constantDiscriminator;
   }
+
+  PointerAuthSchema(SoftKey key, bool isAddressDiscriminated,
+                    Discrimination otherDiscrimination,
+                    Optional<uint16_t> constantDiscriminator = None)
+      : PointerAuthSchema(
+            key, isAddressDiscriminated, PointerAuthenticationMode::SignAndAuth,
+            otherDiscrimination, constantDiscriminator) {}
+
+  PointerAuthSchema(ARM8_3Key key, bool isAddressDiscriminated,
+                    Discrimination otherDiscrimination,
+                    Optional<uint16_t> constantDiscriminator = None)
+      : PointerAuthSchema(
+            key, isAddressDiscriminated, PointerAuthenticationMode::SignAndAuth,
+            otherDiscrimination, constantDiscriminator) {}
 
   Kind getKind() const { return TheKind; }
 
@@ -139,6 +169,10 @@ public:
       return unsigned(getARM8_3Key());
     }
     llvm_unreachable("bad key kind");
+  }
+
+  PointerAuthenticationMode getAuthenticationMode() const {
+    return SelectedAuthenticationMode;
   }
 
   SoftKey getSoftKey() const {
@@ -178,12 +212,24 @@ struct PointerAuthOptions {
   /// The ABI for __block variable copy/destroy function pointers.
   PointerAuthSchema BlockByrefHelperFunctionPointers;
 
+  /// The ABI for pointers to block descriptors.
+  PointerAuthSchema BlockDescriptorPointers;
+
   /// The ABI for Objective-C method lists.
   PointerAuthSchema ObjCMethodListFunctionPointers;
+
+  /// The ABI for a reference to an Objective-C method list in _class_ro_t.
+  PointerAuthSchema ObjCMethodListPointer;
 
   /// The ABI for C++ virtual table pointers (the pointer to the table
   /// itself) as installed in an actual class instance.
   PointerAuthSchema CXXVTablePointers;
+
+  /// TypeInfo has external ABI requirements and is emitted without
+  /// actually having parsed the libcxx definition, so we can't simply
+  /// perform a look up. The settings for this should match the exact
+  /// specification in type_info.h
+  PointerAuthSchema CXXTypeInfoVTablePointer;
 
   /// The ABI for C++ virtual table pointers as installed in a VTT.
   PointerAuthSchema CXXVTTVTablePointers;

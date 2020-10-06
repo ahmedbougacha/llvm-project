@@ -107,7 +107,7 @@ AArch64TargetInfo::AArch64TargetInfo(const llvm::Triple &Triple,
     this->MCountName =
         Opts.EABIVersion == llvm::EABI::GNU ? "\01_mcount" : "mcount";
 
-  if (Triple.getArchName() == "arm64e")
+  if (Triple.isArm64e())
     PointerAuthSupported = true;
 }
 
