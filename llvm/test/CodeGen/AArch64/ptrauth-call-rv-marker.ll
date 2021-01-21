@@ -17,9 +17,8 @@ declare void @foo(i64, i64, i64)
 define void @rv_marker_ptrauth_blraa(i8* ()** %arg0, i64 %arg1) {
 ; CHECK-LABEL: rv_marker_ptrauth_blraa
 ; CHECK:         ldr [[ADDR:x[0-9]+]], [
-; SELDAG-NEXT:   blraa [[ADDR]], x1
+; CHECK-NEXT:    blraa [[ADDR]], x1
 ; SELDAG-NEXT:   mov x29, x29
-; GISEL-NEXT:    blr [[ADDR]]
 ; GISEL-NOT:     mov x29, x29
 ;
 entry:
@@ -33,10 +32,9 @@ entry:
 define void @rv_marker_ptrauth_blraa_disc_imm16(i8* ()** %arg0) {
 ; CHECK-LABEL: rv_marker_ptrauth_blraa_disc_imm16
 ; CHECK:         ldr [[ADDR:x[0-9]+]], [
-; SELDAG-NEXT:   mov w[[DISC:[0-9]+]], #45431
-; SELDAG-NEXT:   blrab [[ADDR]], x[[DISC]]
+; CHECK-NEXT:    mov w[[DISC:[0-9]+]], #45431
+; CHECK-NEXT:    blrab [[ADDR]], x[[DISC]]
 ; SELDAG-NEXT:   mov x29, x29
-; GISEL-NEXT:    blr [[ADDR]]
 ; GISEL-NOT:     mov x29, x29
 ;
   %tmp0 = load i8* ()*, i8* ()** %arg0
@@ -49,12 +47,12 @@ define void @rv_marker_ptrauth_blraa_disc_imm16(i8* ()** %arg0) {
 define void @rv_marker_ptrauth_blraa_multiarg(i8* (i64, i64, i64)** %arg0, i64 %arg1, i64 %a, i64 %b, i64 %c) {
 ; CHECK-LABEL: rv_marker_ptrauth_blraa_multiarg
 ; SELDAG:         mov  [[TMP:x[0-9]+]], x1
-; CHECK:          ldr [[ADDR:x[0-9]+]]
+; SELDAG-NEXT:    ldr [[ADDR:x[0-9]+]]
 ; SELDAG-NEXT:    mov x0, x4
 ; SELDAG-NEXT:    mov x1, x3
 ; SELDAG-NEXT:    blraa [[ADDR]], [[TMP]]
 ; SELDAG-NEXT:    mov x29, x29
-; GISEL:          blr [[ADDR]]
+; GISEL:          blraa
 ; GISEL-NOT:      mov x29, x29
 ;
 entry:
@@ -68,9 +66,8 @@ entry:
 define void @rv_marker_ptrauth_blrab(i8* ()** %arg0, i64 %arg1) {
 ; CHECK-LABEL: rv_marker_ptrauth_blrab
 ; CHECK:         ldr [[ADDR:x[0-9]+]], [
-; SELDAG-NEXT:    blrab [[ADDR]], x1
+; CHECK-NEXT:    blrab [[ADDR]], x1
 ; SELDAG-NEXT:   mov x29, x29
-; GISEL-NEXT:    blr [[ADDR]]
 ; GISEL-NOT:     mov x29, x29
 ;
   %tmp0 = load i8* ()*, i8* ()** %arg0
@@ -83,10 +80,9 @@ define void @rv_marker_ptrauth_blrab(i8* ()** %arg0, i64 %arg1) {
 define void @rv_marker_ptrauth_blrab_disc_imm16(i8* ()** %arg0) {
 ; CHECK-LABEL: rv_marker_ptrauth_blrab_disc_imm16
 ; CHECK:         ldr [[ADDR:x[0-9]+]], [
-; SELDAG-NEXT:    mov w[[DISC:[0-9]+]], #256
-; SELDAG-NEXT:   blrab [[ADDR]], x[[DISC]]
+; CHECK-NEXT:    mov w[[DISC:[0-9]+]], #256
+; CHECK-NEXT:    blrab [[ADDR]], x[[DISC]]
 ; SELDAG-NEXT:   mov x29, x29
-; GISEL-NEXT:    blr [[ADDR]]
 ; GISEL-NOT:     mov x29, x29
 ;
   %tmp0 = load i8* ()*, i8* ()** %arg0
@@ -99,9 +95,8 @@ define void @rv_marker_ptrauth_blrab_disc_imm16(i8* ()** %arg0) {
 define void @rv_marker_ptrauth_blraaz(i8* ()** %arg0) {
 ; CHECK-LABEL: rv_marker_ptrauth_blraaz
 ; CHECK:         ldr [[ADDR:x[0-9]+]], [
-; SELDAG-NEXT:   blraaz [[ADDR]]
+; CHECK-NEXT:    blraaz [[ADDR]]
 ; SELDAG-NEXT:   mov x29, x29
-; GISEL-NEXT:    blr [[ADDR]]
 ; GISEL-NOT:     mov x29, x29
 ;
   %tmp0 = load i8* ()*, i8* ()** %arg0
@@ -114,9 +109,8 @@ define void @rv_marker_ptrauth_blraaz(i8* ()** %arg0) {
 define void @rv_marker_ptrauth_blrabz(i8* ()** %arg0) {
 ; CHECK-LABEL: rv_marker_ptrauth_blrabz
 ; CHECK:         ldr [[ADDR:x[0-9]+]], [
-; SELDAG-NEXT:   blrabz [[ADDR]]
+; CHECK-NEXT:    blrabz [[ADDR]]
 ; SELDAG-NEXT:   mov x29, x29
-; GISEL-NEXT:    blr [[ADDR]]
 ; GISEL-NOT:     mov x29, x29
 ;
   %tmp0 = load i8* ()*, i8* ()** %arg0

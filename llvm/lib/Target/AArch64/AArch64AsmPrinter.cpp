@@ -1518,8 +1518,11 @@ void AArch64AsmPrinter::emitInstruction(const MachineInstr *MI) {
   // attributes (isCall, isReturn, etc.). We lower them to the real
   // instruction here.
   case AArch64::AUTH_TCRETURNrii:
-  case AArch64::AUTH_TCRETURNriri: {
-    const bool isZero = MI->getOpcode() == AArch64::AUTH_TCRETURNrii;
+  case AArch64::AUTH_TCRETURNriri:
+  case AArch64::AUTH_TCRETURN_BTIrii:
+  case AArch64::AUTH_TCRETURN_BTIriri: {
+    const bool isZero = MI->getOpcode() == AArch64::AUTH_TCRETURNrii ||
+                        MI->getOpcode() == AArch64::AUTH_TCRETURN_BTIrii;
     const uint64_t Key = MI->getOperand(2).getImm();
     assert (Key < 2 && "Unknown key kind for authenticating tail-call return");
 

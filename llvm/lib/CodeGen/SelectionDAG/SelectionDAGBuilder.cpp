@@ -7923,12 +7923,7 @@ void SelectionDAGBuilder::LowerCallSiteWithPtrAuthBundle(
   }
 
   // Functions should never be ptrauth-called directly.
-  // We could lower these to direct unauthenticated calls, but for that to
-  // occur, there must have been a semantic mismatch somewhere leading to this
-  // arguably incorrect IR.
-  if (isa<Function>(CalleeV))
-    report_fatal_error("Cannot lower direct authenticated call to"
-                       " unauthenticated target");
+  assert(!isa<Function>(CalleeV) && "invalid direct ptrauth call");
 
   // Otherwise, do an authenticated indirect call.
   TargetLowering::PtrAuthInfo PAI = {Key->getZExtValue(),
