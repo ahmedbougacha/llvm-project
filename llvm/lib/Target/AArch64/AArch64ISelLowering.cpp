@@ -6493,13 +6493,16 @@ AArch64TargetLowering::LowerPtrAuthGlobalAddress(SDValue Op,
 
   SDValue Key = DAG.getTargetConstant(KeyC, DL, MVT::i32);
   SDValue Discriminator = DAG.getTargetConstant(DiscriminatorC, DL, MVT::i64);
+  SDValue TAddrDiscriminator = !isNullConstant(AddrDiscriminator)
+                                   ? AddrDiscriminator
+                                   : DAG.getRegister(AArch64::XZR, MVT::i64);
 
   // No GOT load needed -> MOVaddrPAC
   if (!NeedsGOTLoad) {
     assert(!PtrGV->hasExternalWeakLinkage() && "extern_weak should use GOT");
     return SDValue(
         DAG.getMachineNode(AArch64::MOVaddrPAC, DL, MVT::i64,
-                           {TPtr, Key, AddrDiscriminator, Discriminator}),
+                           {TPtr, Key, TAddrDiscriminator, Discriminator}),
         0);
   }
 
@@ -6510,7 +6513,7 @@ AArch64TargetLowering::LowerPtrAuthGlobalAddress(SDValue Op,
       !isUInt<5>(PtrOffsetC))
     return SDValue(
         DAG.getMachineNode(AArch64::LOADgotPAC, DL, MVT::i64,
-                           {TPtr, Key, AddrDiscriminator, Discriminator}),
+                           {TPtr, Key, TAddrDiscriminator, Discriminator}),
         0);
 
   // GOT load, dynamic materialization disallowed -> LOADauthptrgot
