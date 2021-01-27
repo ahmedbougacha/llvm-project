@@ -789,6 +789,7 @@ void CoroCloner::create() {
     break;
 
   case coro::ABI::Switch:
+  case coro::ABI::Async:
     break;
   }
 

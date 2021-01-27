@@ -191,6 +191,7 @@ struct LLVM_LIBRARY_VISIBILITY Shape {
   Optional<GlobalPtrAuthInfo> getResumePtrAuthInfo() const {
     switch (ABI) {
     case coro::ABI::Switch:
+    case coro::ABI::Async:
       return None;
     case coro::ABI::Retcon:
     case coro::ABI::RetconOnce:
