@@ -71,6 +71,7 @@
 #include "llvm/IR/EHPersonalities.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/GetElementPtrTypeIterator.h"
+#include "llvm/IR/GlobalVariable.h"
 #include "llvm/IR/InlineAsm.h"
 #include "llvm/IR/InstrTypes.h"
 #include "llvm/IR/Instructions.h"
@@ -1793,6 +1794,14 @@ SDValue SelectionDAGBuilder::getValueImpl(const Value *V) {
 
     if (const GlobalValue *GV = dyn_cast<GlobalValue>(C))
       return DAG.getGlobalAddress(GV, getCurSDLoc(), VT);
+
+    if (const ConstantPtrAuth *CPA = dyn_cast<ConstantPtrAuth>(C)) {
+      return DAG.getNode(ISD::PtrAuthGlobalAddress, getCurSDLoc(), VT,
+                         getValue(CPA->getPointer()),
+                         getValue(CPA->getKey()),
+                         getValue(CPA->getAddrDiscriminator()),
+                         getValue(CPA->getDiscriminator()));
+    }
 
     if (isa<ConstantPointerNull>(C)) {
       unsigned AS = V->getType()->getPointerAddressSpace();
