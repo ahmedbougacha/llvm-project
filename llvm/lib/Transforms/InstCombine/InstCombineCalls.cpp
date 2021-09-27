@@ -2615,6 +2615,7 @@ Instruction *InstCombinerImpl::visitCallInst(CallInst &CI) {
     // (sign|resign) + (auth|resign) can be folded by omitting the middle
     // sign+auth component if the key and discriminator match.
     bool NeedSign = II->getIntrinsicID() == Intrinsic::ptrauth_resign;
+    Value *Ptr = II->getArgOperand(0);
     Value *Key = II->getArgOperand(1);
     Value *Disc = II->getArgOperand(2);
 
@@ -2633,6 +2634,29 @@ Instruction *InstCombinerImpl::visitCallInst(CallInst &CI) {
         AuthDisc = CI->getArgOperand(2);
       } else
         break;
+    } else if (auto PIC = dyn_cast<ConstantExpr>(Ptr)) {
+      // ptrauth constants are equivalent to a call to @llvm.ptrauth.sign for
+      // our purposes, so check for that too.
+      if (PIC->getOpcode() != Instruction::PtrToInt)
+        break;
+
+      auto CPA = dyn_cast<ConstantPtrAuth>(PIC->getOperand(0));
+      if (!CPA || !CPA->isKnownCompatibleWith(Key, Disc, DL))
+        break;
+
+      if (NeedSign && isa<ConstantInt>(II->getArgOperand(4))) {
+        auto Key = cast<ConstantInt>(II->getArgOperand(3));
+        auto Disc = cast<ConstantInt>(II->getArgOperand(4));
+        auto AddrDisc = ConstantPointerNull::get(Builder.getPtrTy());
+        replaceInstUsesWith(*II, ConstantExpr::getPointerCast(
+                                     ConstantPtrAuth::get(CPA->getPointer(),
+                                                          Key, Disc, AddrDisc),
+                                     II->getType()));
+        eraseInstFromFunction(*II);
+        return nullptr;
+      }
+
+      BasePtr = Builder.CreatePtrToInt(CPA->getPointer(), II->getType());
     } else
       break;
 
