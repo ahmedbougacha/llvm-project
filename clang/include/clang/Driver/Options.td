@@ -1,4 +1,4 @@
-//===--- Options.td - Options for clang -----------------------------------===//
+
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -4175,6 +4175,20 @@ defm strict_return : BoolFOption<"strict-return",
 
 let Flags = [TargetSpecific] in {
 defm ptrauth_intrinsics : OptInCC1FFlag<"ptrauth-intrinsics", "Enable pointer authentication intrinsics">;
+}
+
+let Group = f_Group in {
+  def fptrauth_abi_version_EQ : Joined<["-"], "fptrauth-abi-version=">,
+    Visibility<[ClangOption, CC1Option, CC1AsOption]>,
+    HelpText<"Pointer Authentication ABI version">;
+  def fno_ptrauth_abi_version : Flag<["-"], "fno-ptrauth-abi-version">,
+    HelpText<"Disable Pointer Authentication ABI versioning">;
+
+  def fptrauth_kernel_abi_version : Flag<["-"], "fptrauth-kernel-abi-version">,
+    Visibility<[ClangOption, CC1Option, CC1AsOption]>,
+    HelpText<"Enable Pointer Authentication kernel ABI version">;
+  def fno_ptrauth_kernel_abi_version : Flag<["-"], "fno-ptrauth-kernel-abi-version">,
+    HelpText<"Disable Pointer Authentication kernel ABI versioning">;
 }
 
 def fenable_matrix : Flag<["-"], "fenable-matrix">, Group<f_Group>,
