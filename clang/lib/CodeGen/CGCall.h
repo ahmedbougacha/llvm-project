@@ -109,9 +109,8 @@ public:
 
   /// Construct a callee.  Call this constructor directly when this
   /// isn't a direct call.
-  CGCallee(
-      const CGCalleeInfo &abstractInfo, llvm::Value *functionPtr,
-      const CGPointerAuthInfo &pointerAuthInfo = /*FIXME*/ CGPointerAuthInfo())
+  CGCallee(const CGCalleeInfo &abstractInfo, llvm::Value *functionPtr,
+           const CGPointerAuthInfo &pointerAuthInfo)
       : KindOrFunctionPointer(
             SpecialKind(reinterpret_cast<uintptr_t>(functionPtr))) {
     OrdinaryInfo.AbstractInfo = abstractInfo;
