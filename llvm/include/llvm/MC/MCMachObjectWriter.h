@@ -178,7 +178,9 @@ public:
   /// @}
 
   void writeHeader(MachO::HeaderFileType Type, unsigned NumLoadCommands,
-                   unsigned LoadCommandsSize, bool SubsectionsViaSymbols);
+                   unsigned LoadCommandsSize, bool SubsectionsViaSymbols,
+                   std::optional<unsigned> PtrAuthABIVersion,
+                   bool PtrAuthKernelABIVersion);
 
   /// Write a segment load command.
   ///

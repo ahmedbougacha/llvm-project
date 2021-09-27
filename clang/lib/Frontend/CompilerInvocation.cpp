@@ -3358,6 +3358,13 @@ static void GeneratePointerAuthArgs(const LangOptions &Opts,
     GenerateArg(Consumer, OPT_fptrauth_vtable_pointer_type_discrimination);
   if (Opts.PointerAuthInitFini)
     GenerateArg(Consumer, OPT_fptrauth_init_fini);
+
+  if (Opts.PointerAuthABIVersionEncoded) {
+    GenerateArg(Consumer, OPT_fptrauth_abi_version_EQ,
+                Twine(Opts.PointerAuthABIVersion));
+    if (Opts.PointerAuthKernelABIVersion)
+      GenerateArg(Consumer, OPT_fptrauth_kernel_abi_version);
+  }
 }
 
 static void ParsePointerAuthArgs(LangOptions &Opts, ArgList &Args,
@@ -3371,6 +3378,13 @@ static void ParsePointerAuthArgs(LangOptions &Opts, ArgList &Args,
   Opts.PointerAuthVTPtrTypeDiscrimination =
       Args.hasArg(OPT_fptrauth_vtable_pointer_type_discrimination);
   Opts.PointerAuthInitFini = Args.hasArg(OPT_fptrauth_init_fini);
+
+  Opts.PointerAuthABIVersionEncoded =
+      Args.hasArg(OPT_fptrauth_abi_version_EQ) ||
+      Args.hasArg(OPT_fptrauth_kernel_abi_version);
+  Opts.PointerAuthABIVersion =
+      getLastArgIntValue(Args, OPT_fptrauth_abi_version_EQ, 0, Diags);
+  Opts.PointerAuthKernelABIVersion = Args.hasArg(OPT_fptrauth_kernel_abi_version);
 }
 
 /// Check if input file kind and language standard are compatible.
