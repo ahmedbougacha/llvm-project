@@ -4203,6 +4203,10 @@ let Group = f_Group in {
       Visibility<[ClangOption, CC1Option, CC1AsOption]>,
       HelpText<"Authentication mode for ObjC isa field. Full auth if unspecified">, Values<"strip,sign-and-strip,sign-and-auth">;
 
+  def fbranch_target_identification : Flag<["-"], "fbranch-target-identification">,
+      HelpText<"Emit branch target identification instructions for indirect branch destinations">;
+  def fno_branch_target_identification : Flag<["-"], "fno-branch-target-identification">;
+
   def fptrauth_abi_version_EQ : Joined<["-"], "fptrauth-abi-version=">,
     Visibility<[ClangOption, CC1Option, CC1AsOption]>,
     HelpText<"Pointer Authentication ABI version">;
