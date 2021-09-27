@@ -31,6 +31,8 @@ enum EdgeKind_aarch64 : Edge::Kind {
   ///
   Pointer64 = Edge::FirstRelocation,
 
+  Pointer64Authenticated,
+
   /// A plain 32-bit pointer value relocation.
   ///
   /// Fixup expression:
