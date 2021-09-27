@@ -4028,8 +4028,33 @@ Instruction *InstCombinerImpl::visitCallBase(CallBase &Call) {
 /// the arguments of the call/invoke.
 /// CallBrInst is not supported.
 bool InstCombinerImpl::transformConstExprCastCall(CallBase &Call) {
-  auto *Callee =
-      dyn_cast<Function>(Call.getCalledOperand()->stripPointerCasts());
+  auto *CalleeC = Call.getCalledOperand()->stripPointerCasts();
+
+  // The callee can also be a ptrauth constant.  Try to unwrap it.
+  bool DropPtrauthBundle = false;
+  if (auto *CPA = dyn_cast<ConstantPtrAuth>(CalleeC)) {
+    auto *CalleePtr = CPA->getPointer()->stripPointerCasts();
+    // If the ptrauth constant isn't based on a function pointer, bail out.
+    if (!isa<Function>(CalleePtr))
+      return false;
+
+    // If there's no bundle, this is incorrect, but let it crash at runtime.
+    auto PAB = Call.getOperandBundle("ptrauth");
+    if (!PAB)
+      return false;
+
+    auto *Key = cast<ConstantInt>(PAB->Inputs[0]);
+    Value *Discriminator = PAB->Inputs[1];
+
+    // If the bundle doesn't match, this is probably going to fail to auth.
+    if (!CPA->isKnownCompatibleWith(Key, Discriminator, DL))
+      return false;
+
+    DropPtrauthBundle = true;
+    CalleeC = CalleePtr;
+  }
+
+  auto *Callee = dyn_cast<Function>(CalleeC);
   if (!Callee)
     return false;
 
@@ -4246,7 +4271,10 @@ bool InstCombinerImpl::transformConstExprCastCall(CallBase &Call) {
       Ctx, FnAttrs, AttributeSet::get(Ctx, RAttrs), ArgAttrs);
 
   SmallVector<OperandBundleDef, 1> OpBundles;
-  Call.getOperandBundlesAsDefs(OpBundles);
+  if (DropPtrauthBundle)
+    Call.getOperandBundlesAsDefsOtherThan(OpBundles, {LLVMContext::OB_ptrauth});
+  else
+    Call.getOperandBundlesAsDefs(OpBundles);
 
   CallBase *NewCall;
   if (InvokeInst *II = dyn_cast<InvokeInst>(Caller)) {
