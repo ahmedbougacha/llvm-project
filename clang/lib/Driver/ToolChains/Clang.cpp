@@ -1778,6 +1778,9 @@ void Clang::AddAArch64TargetArgs(const ArgList &Args,
                    options::OPT_fno_ptrauth_objc_isa, false))
     CmdArgs.push_back("-fptrauth-objc-isa-mode=sign-and-auth");
 
+  if (Args.hasArg(options::OPT_fbranch_target_identification,
+                  options::OPT_fno_branch_target_identification, false))
+    CmdArgs.push_back("-mbranch-target-enforce");
 }
 
 void Clang::AddLoongArchTargetArgs(const ArgList &Args,

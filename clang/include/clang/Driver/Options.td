@@ -4202,9 +4202,12 @@ let Group = f_Group in {
       HelpText<"Enable software lowering of pointer authentication">;
     def fptrauth_objc_isa_mode : Joined<["-"], "fptrauth-objc-isa-mode=">,
       HelpText<"Authentication mode for ObjC isa field. Full auth if unspecified">, Values<"strip,sign-and-strip,sign-and-auth">;
+    def fbranch_target_identification : Flag<["-"], "fbranch-target-identification">,
+      HelpText<"Emit branch target identification instructions for indirect branch destinations">;
   }
 
   def fno_ptrauth_soft : Flag<["-"], "fno-ptrauth-soft">;
+  def fno_branch_target_identification : Flag<["-"], "fno-branch-target-identification">;
 }
 
 let Group = f_Group in {
