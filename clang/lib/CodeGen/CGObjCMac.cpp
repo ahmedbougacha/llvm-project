@@ -7320,7 +7320,7 @@ CGObjCNonFragileABIMac::EmitVTableMessageSend(CodeGenFunction &CGF,
   llvm::Value *calleePtr = CGF.Builder.CreateLoad(calleeAddr, "msgSend_fn");
 
   calleePtr = CGF.Builder.CreateBitCast(calleePtr, MSI.MessengerType);
-  CGCallee callee(CGCalleeInfo(), calleePtr);
+  CGCallee callee(CGCalleeInfo(), calleePtr, /*FIXME*/CGPointerAuthInfo());
 
   RValue result = CGF.EmitCall(MSI.CallInfo, callee, returnSlot, args);
   return nullReturn.complete(CGF, returnSlot, result, resultType, formalArgs,

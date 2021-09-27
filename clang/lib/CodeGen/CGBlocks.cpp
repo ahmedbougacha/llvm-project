@@ -1217,7 +1217,7 @@ RValue CodeGenFunction::EmitBlockCallExpr(const CallExpr *E,
     CGM.getTypes().arrangeBlockFunctionCall(Args, FuncTy);
 
   // Prepare the callee.
-  CGCallee Callee(CGCalleeInfo(), Func);
+  CGCallee Callee(CGCalleeInfo(), Func, /*FIXME*/CGPointerAuthInfo());
 
   // And call the block.
   return EmitCall(FnInfo, Callee, ReturnValue, Args, CallOrInvoke);
