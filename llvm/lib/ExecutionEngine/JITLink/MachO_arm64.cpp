@@ -627,7 +627,6 @@ static Error applyPACSigningToModInitPointers(LinkGraph &G) {
 
 void link_MachO_arm64(std::unique_ptr<LinkGraph> G,
                       std::unique_ptr<JITLinkContext> Ctx) {
-
   PassConfiguration Config;
 
   if (Ctx->shouldAddDefaultTargetPasses(G->getTargetTriple())) {

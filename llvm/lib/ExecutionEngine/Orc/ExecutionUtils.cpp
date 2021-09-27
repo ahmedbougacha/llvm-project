@@ -262,8 +262,13 @@ Error DynamicLibrarySearchGenerator::tryToGenerate(
 
     std::string Tmp((*Name).data() + HasGlobalPrefix,
                     (*Name).size() - HasGlobalPrefix);
-    if (void *P = Dylib.getAddressOfSymbol(Tmp.c_str()))
+    if (void *P = Dylib.getAddressOfSymbol(Tmp.c_str())) {
+      // If this process uses ptrauth then strip the pointer.
+#if __has_feature(ptrauth_calls)
+      P = __builtin_ptrauth_strip(P, 0);
+#endif
       NewSymbols[Name] = {ExecutorAddr::fromPtr(P), JITSymbolFlags::Exported};
+    }
   }
 
   if (NewSymbols.empty())
