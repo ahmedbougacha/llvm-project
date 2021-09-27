@@ -5424,6 +5424,38 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
     return RValue::get(Result);
   }
 
+  case Builtin::BI__builtin_virtual_member_address: {
+    Address This = EmitLValue(E->getArg(0)).getAddress();
+    APValue ConstMemFun;
+    E->getArg(1)->isCXX11ConstantExpr(getContext(), &ConstMemFun, nullptr);
+    auto CXXMethod = cast<CXXMethodDecl>(ConstMemFun.getMemberPointerDecl());
+    const CGFunctionInfo &FInfo =
+        CGM.getTypes().arrangeCXXMethodDeclaration(CXXMethod);
+    auto Ty = CGM.getTypes().GetFunctionType(FInfo);
+    CGCallee VCallee = CGCallee::forVirtual(nullptr, CXXMethod, This, Ty);
+    auto Callee = VCallee.prepareConcreteCallee(*this).getFunctionPointer();
+    if (CGM.getCodeGenOpts().PointerAuth.FunctionPointers) {
+      auto Strip = CGM.getIntrinsic(llvm::Intrinsic::ptrauth_strip);
+      Callee =
+          EmitRuntimeCall(Strip, {Builder.CreatePtrToInt(Callee, IntPtrTy),
+                                  llvm::ConstantInt::get(IntTy, 0)});
+    }
+    Callee = Builder.CreateBitOrPointerCast(Callee, Int8PtrTy);
+    return RValue::get(Callee);
+  }
+
+  case Builtin::BI__builtin_get_vtable_pointer: {
+    auto target = E->getArg(0);
+    auto type = target->getType();
+    auto decl = type->getPointeeCXXRecordDecl();
+    assert(decl);
+    auto thisAddress = EmitPointerWithAlignment(target);
+    assert(thisAddress.isValid());
+    auto vtablePointer =
+        GetVTablePtr(thisAddress, Int8PtrTy, decl, VTableAuthMode::MustTrap);
+    return RValue::get(vtablePointer);
+  }
+
   case Builtin::BI__exception_code:
   case Builtin::BI_exception_code:
     return RValue::get(EmitSEHExceptionCode());
