@@ -156,6 +156,8 @@ private:
                           bool NeedsWinCFI, bool *HasWinCFI, bool EmitCFI,
                           StackOffset InitialOffset, bool FollowupAllocs) const;
 
+  bool shouldAuthenticateLR(const MachineFunction &MF) const;
+
   /// Emit target zero call-used regs.
   void emitZeroCallUsedRegs(BitVector RegsToZero,
                             MachineBasicBlock &MBB) const override;
