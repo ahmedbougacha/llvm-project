@@ -282,6 +282,9 @@ private:
   Instruction *transformCallThroughTrampoline(CallBase &Call,
                                               IntrinsicInst &Tramp);
 
+  Instruction *tryCombinePtrAuthIntrinsic(CallBase &Call);
+
+
   // Return (a, b) if (LHS, RHS) is known to be (a, b) or (b, a).
   // Otherwise, return std::nullopt
   // Currently it matches:
