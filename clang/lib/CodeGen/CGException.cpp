@@ -1989,7 +1989,7 @@ void CodeGenFunction::EmitCapturedLocals(CodeGenFunction &ParentCGF,
             EmitLValueForLambdaField(LambdaThisCaptureField);
         if (!LambdaThisCaptureField->getType()->isPointerType()) {
           CXXThisValue =
-              ThisFieldLValue.getAddress(*this).emitRawPointer(*this);
+              ThisFieldLValue.getAddress().emitRawPointer(*this);
         } else {
           CXXThisValue = EmitLoadOfLValue(ThisFieldLValue, SourceLocation())
                              .getScalarVal();
