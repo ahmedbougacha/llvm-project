@@ -412,6 +412,9 @@ enum ConstantsCodes {
                                       //                 asmdialect|unwind,
                                       //                 asmstr,conststr]
   CST_CODE_CE_GEP_WITH_INRANGE = 31,  // [opty, flags, range, n x operands]
+  CST_CODE_SIGNED_PTR = 32,           // CE_SIGNED_PTR: [ptrty, ptr, key,
+                                      //                 addrdiscty, addrdisc,
+                                      //                 disc]
 };
 
 /// CastOpcodes - These are values used in the bitcode files to encode which
