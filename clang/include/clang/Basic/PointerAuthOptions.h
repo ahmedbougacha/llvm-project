@@ -19,6 +19,9 @@ namespace clang {
 constexpr unsigned PointerAuthKeyNone = -1;
 
 struct PointerAuthOptions {
+  /// Do authentication failures cause a trap?
+  bool AuthTraps = false;
+
   /// Should return addresses be authenticated?
   bool ReturnAddresses = false;
 };

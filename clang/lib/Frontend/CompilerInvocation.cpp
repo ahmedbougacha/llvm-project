@@ -1463,6 +1463,7 @@ bool CompilerInvocation::setDefaultPointerAuthOptions(
     const llvm::Triple &Triple) {
   if (Triple.getArch() == llvm::Triple::aarch64) {
     Opts.ReturnAddresses = LangOpts.PointerAuthReturns;
+    Opts.AuthTraps = LangOpts.PointerAuthAuthTraps;
     return true;
   }
 
@@ -1474,7 +1475,7 @@ static bool parsePointerAuthOptions(PointerAuthOptions &Opts,
                                     const LangOptions &LangOpts,
                                     const llvm::Triple &Triple,
                                     DiagnosticsEngine &Diags) {
-  if (!LangOpts.PointerAuthReturns)
+  if (!LangOpts.PointerAuthReturns && !LangOpts.PointerAuthAuthTraps)
     return true;
 
   if (CompilerInvocation::setDefaultPointerAuthOptions(Opts, LangOpts, Triple))
