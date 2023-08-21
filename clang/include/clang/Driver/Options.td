@@ -4184,6 +4184,8 @@ defm ptrauth_calls : OptInCC1FFlag<"ptrauth-calls",
   "Enable signing and authentication of all indirect calls">;
 defm ptrauth_function_pointer_type_discrimination : OptInCC1FFlag<"ptrauth-function-pointer-type-discrimination",
   "Enabling type discrimination on C function pointers">;
+defm ptrauth_block_descriptor_pointers : OptInCC1FFlag<"ptrauth-block-descriptor-pointers",
+  "Enable signing block descriptor pointers">;
 }
 
 let Group = f_Group in {

@@ -1765,6 +1765,8 @@ void Clang::AddAArch64TargetArgs(const ArgList &Args,
   Args.addOptInFlag(
       CmdArgs, options::OPT_fptrauth_function_pointer_type_discrimination,
       options::OPT_fno_ptrauth_function_pointer_type_discrimination);
+  Args.addOptInFlag(CmdArgs, options::OPT_fptrauth_block_descriptor_pointers,
+                    options::OPT_fno_ptrauth_block_descriptor_pointers);
 }
 
 void Clang::AddLoongArchTargetArgs(const ArgList &Args,
