@@ -4178,6 +4178,8 @@ defm ptrauth_intrinsics : OptInCC1FFlag<"ptrauth-intrinsics",
   "Enable pointer authentication intrinsics">;
 defm ptrauth_returns : OptInCC1FFlag<"ptrauth-returns",
   "Enable signing and authentication of return addresses">;
+defm ptrauth_auth_traps : OptInCC1FFlag<"ptrauth-auth-traps",
+  "Enable traps on authentication failures">;
 }
 
 let Group = f_Group in {
