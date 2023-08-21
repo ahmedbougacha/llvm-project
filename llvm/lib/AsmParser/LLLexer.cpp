@@ -704,6 +704,7 @@ lltok::Kind LLLexer::LexIdentifier() {
   KEYWORD(blockaddress);
   KEYWORD(dso_local_equivalent);
   KEYWORD(no_cfi);
+  KEYWORD(ptrauth);
 
   // Metadata types.
   KEYWORD(distinct);

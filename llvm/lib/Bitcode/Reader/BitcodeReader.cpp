@@ -504,7 +504,8 @@ public:
   static constexpr uint8_t NoCFIOpcode = 252;
   static constexpr uint8_t DSOLocalEquivalentOpcode = 251;
   static constexpr uint8_t BlockAddressOpcode = 250;
-  static constexpr uint8_t FirstSpecialOpcode = BlockAddressOpcode;
+  static constexpr uint8_t ConstantPtrAuthOpcode = 249;
+  static constexpr uint8_t FirstSpecialOpcode = ConstantPtrAuthOpcode;
 
   // Separate struct to make passing different number of parameters to
   // BitcodeConstant::create() more convenient.
@@ -1504,6 +1505,18 @@ Expected<Value *> BitcodeReader::materializeValue(unsigned StartValID,
         C = ConstantExpr::get(BC->Opcode, ConstOps[0], ConstOps[1], BC->Flags);
       } else {
         switch (BC->Opcode) {
+        case BitcodeConstant::ConstantPtrAuthOpcode: {
+          auto *Key = dyn_cast<ConstantInt>(ConstOps[1]);
+          if (!Key)
+            return error("ptrauth key operand must be ConstantInt");
+
+          auto *Disc = dyn_cast<ConstantInt>(ConstOps[3]);
+          if (!Disc)
+            return error("ptrauth disc operand must be ConstantInt");
+
+          C = ConstantPtrAuth::get(ConstOps[0], Key, ConstOps[2], Disc);
+          break;
+        }
         case BitcodeConstant::NoCFIOpcode: {
           auto *GV = dyn_cast<GlobalValue>(ConstOps[0]);
           if (!GV)
@@ -3554,6 +3567,21 @@ Error BitcodeReader::parseConstants() {
                                   Record[1]);
       break;
     }
+    case bitc::CST_CODE_SIGNED_PTR: {
+      if (Record.size() < 6)
+        return error("Invalid record");
+      Type *PtrTy = getTypeByID(Record[0]);
+      if (!PtrTy)
+        return error("Invalid record");
+
+      // PtrTy, Ptr, Key, AddrDiscTy, AddrDisc, Disc
+      V = BitcodeConstant::create(
+        Alloc, CurTy, BitcodeConstant::ConstantPtrAuthOpcode,
+        {(unsigned)Record[1], (unsigned)Record[2], (unsigned)Record[4],
+         (unsigned)Record[5]});
+
+      break;
+    }
     }
 
     assert(V->getType() == getTypeByID(CurTyID) && "Incorrect result type ID");
@@ -3716,12 +3744,15 @@ Error BitcodeReader::globalCleanup() {
 
   // Look for global variables which need to be renamed.
   std::vector<std::pair<GlobalVariable *, GlobalVariable *>> UpgradedVariables;
-  for (GlobalVariable &GV : TheModule->globals())
-    if (GlobalVariable *Upgraded = UpgradeGlobalVariable(&GV))
+  for (GlobalVariable &GV : TheModule->globals()) {
+    GlobalVariable *Upgraded = nullptr;
+    if (UpgradeGlobalVariable(&GV, Upgraded))
       UpgradedVariables.emplace_back(&GV, Upgraded);
+  }
   for (auto &Pair : UpgradedVariables) {
     Pair.first->eraseFromParent();
-    TheModule->insertGlobalVariable(Pair.second);
+    if (Pair.second)
+      TheModule->insertGlobalVariable(Pair.second);
   }
 
   // Force deallocation of memory for these vectors to favor the client that
