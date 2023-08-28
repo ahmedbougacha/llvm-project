@@ -400,3 +400,17 @@ as follows:
 | ----------------- | -------- | -------- | -------- | ------------- | ------------------- |
 | address diversity | reserved | key      | reserved | discriminator | reserved for addend |
 ```
+
+#### MachO Object File Representation
+
+At the object file level, in MachO, authenticated relocations are represented
+using the ``ARM64_RELOC_AUTHENTICATED_POINTER`` relocation kind (with value
+``11``).
+
+The pointer authentication information is encoded into the addend, as such:
+
+```
+| 63 | 62 | 61-51 | 50-49 |   48   | 47     -     32 | 31  -  0 |
+| -- | -- | ----- | ----- | ------ | --------------- | -------- |
+|  1 |  0 |   0   |  key  |  addr  |  discriminator  |  addend  |
+```
