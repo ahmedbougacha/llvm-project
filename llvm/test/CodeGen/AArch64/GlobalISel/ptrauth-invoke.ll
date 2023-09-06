@@ -48,6 +48,56 @@ continuebb:
   ret i32 %tmp0
 }
 
+; CHECK-LABEL: _test_invoke_ia_0_direct:
+; CHECK-NEXT: [[FNBEGIN:L.*]]:
+; CHECK-NEXT:  .cfi_startproc
+; CHECK-NEXT:  .cfi_personality 155, ___gxx_personality_v0
+; CHECK-NEXT:  .cfi_lsda 16, [[EXCEPT:Lexception[0-9]+]]
+; CHECK-NEXT: ; %bb.0:
+; CHECK-NEXT:  stp x20, x19, [sp, #-32]!
+; CHECK-NEXT:  stp x29, x30, [sp, #16]
+; CHECK-NEXT:  .cfi_def_cfa_offset 32
+; CHECK-NEXT:  .cfi_offset w30, -8
+; CHECK-NEXT:  .cfi_offset w29, -16
+; CHECK-NEXT:  .cfi_offset w19, -24
+; CHECK-NEXT:  .cfi_offset w20, -32
+; CHECK-NEXT: [[PRECALL:L.*]]:
+; CHECK-NEXT:  bl _baz
+; CHECK-NEXT:  mov x19, x0
+; CHECK-NEXT: [[POSTCALL:L.*]]:
+; CHECK-NEXT: [[POSTCALL_BB:L.*]]:
+; CHECK-NEXT:  bl _foo
+; CHECK-NEXT:  mov x0, x19
+; CHECK-NEXT:  ldp x29, x30, [sp, #16]
+; CHECK-NEXT:  ldp x20, x19, [sp], #32
+; CHECK-NEXT:  ret
+; CHECK-NEXT: [[LPADBB:LBB[0-9_]+]]:
+; CHECK-NEXT: [[LPAD:L.*]]:
+; CHECK-NEXT:  mov w19, #-1
+; CHECK-NEXT:  b [[POSTCALL_BB]]
+
+; CHECK-LABEL: GCC_except_table{{.*}}:
+; CHECK-NEXT: [[EXCEPT]]:
+; CHECK:       .uleb128 [[POSTCALL]]-[[PRECALL]] ;   Call between [[PRECALL]] and [[POSTCALL]]
+; CHECK-NEXT:  .uleb128 [[LPAD]]-[[FNBEGIN]]     ;     jumps to [[LPAD]]
+; CHECK-NEXT:  .byte 0                           ;   On action: cleanup
+
+define i32 @test_invoke_ia_0_direct() #0 personality ptr @__gxx_personality_v0 {
+  %tmp0 = invoke i32 @baz.ptrauth() [ "ptrauth"(i32 0, i64 0) ] to label %continuebb
+            unwind label %unwindbb
+
+unwindbb:
+  %tmp1 = landingpad { ptr, i32 } cleanup
+  call void @foo()
+  ret i32 -1
+
+continuebb:
+  call void @foo()
+  ret i32 %tmp0
+}
+
+@baz.ptrauth = private constant { ptr, i32, i64, i64 } { ptr @baz, i32 0, i64 0, i64 0 }, section "llvm.ptrauth"
+
 @_ZTIPKc = external constant ptr
 @hello_str = private unnamed_addr constant [6 x i8] c"hello\00", align 1
 
@@ -172,6 +222,7 @@ continuebb:
 
 declare void @foo()
 declare void @bar(ptr)
+declare i32 @baz()
 
 declare i32 @__gxx_personality_v0(...)
 declare ptr @__cxa_allocate_exception(i64)
