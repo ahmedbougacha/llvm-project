@@ -48,6 +48,7 @@
 #include "clang/AST/OSLog.h"
 #include "clang/AST/OptionalDiagnostic.h"
 #include "clang/AST/RecordLayout.h"
+#include "clang/AST/StableHash.h"
 #include "clang/AST/StmtVisitor.h"
 #include "clang/AST/TypeLoc.h"
 #include "clang/Basic/Builtins.h"
@@ -12584,6 +12585,13 @@ bool IntExprEvaluator::VisitBuiltinCallExpr(const CallExpr *E,
   case Builtin::BI__builtin_expect_with_probability:
     return Visit(E->getArg(0));
 
+  case Builtin::BI__builtin_ptrauth_string_discriminator: {
+    auto literal = cast<StringLiteral>(E->getArg(0)->IgnoreParenImpCasts());
+    auto result = getPointerAuthStringDiscriminator(Info.Ctx,
+                                                    literal->getString());
+    return Success(result, E);
+  }
+
   case Builtin::BI__builtin_ffs:
   case Builtin::BI__builtin_ffsl:
   case Builtin::BI__builtin_ffsll: {
@@ -13972,6 +13980,12 @@ bool IntExprEvaluator::VisitUnaryExprOrTypeTraitExpr(
                      E);
   }
 
+  case UETT_PtrAuthTypeDiscriminator: {
+    if (E->getArgumentType()->isDependentType())
+      return false;
+    return Success(
+        Info.Ctx.getPointerAuthTypeDiscriminator(E->getArgumentType()), E);
+  }
   case UETT_VecStep: {
     QualType Ty = E->getTypeOfArgument();
 
