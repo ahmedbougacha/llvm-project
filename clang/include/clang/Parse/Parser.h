@@ -3852,6 +3852,8 @@ private:
   ExprResult ParseArrayTypeTrait();
   ExprResult ParseExpressionTrait();
 
+  ExprResult ParseBuiltinPtrauthTypeDiscriminator();
+
   //===--------------------------------------------------------------------===//
   // Preprocessor code-completion pass-through
   void CodeCompleteDirective(bool InConditional) override;
