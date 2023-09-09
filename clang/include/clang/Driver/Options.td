@@ -4182,6 +4182,10 @@ defm ptrauth_auth_traps : OptInCC1FFlag<"ptrauth-auth-traps",
   "Enable traps on authentication failures">;
 defm ptrauth_calls : OptInCC1FFlag<"ptrauth-calls",
   "Enable signing and authentication of all indirect calls">;
+defm ptrauth_vtable_pointer_address_discrimination : OptInCC1FFlag<"ptrauth-vtable-pointer-address-discrimination",
+  "Enable address discrimination of vtable pointers">;
+defm ptrauth_vtable_pointer_type_discrimination : OptInCC1FFlag<"ptrauth-vtable-pointer-type-discrimination",
+  "Enable type discrimination of vtable pointers">;
 defm ptrauth_function_pointer_type_discrimination : OptInCC1FFlag<"ptrauth-function-pointer-type-discrimination",
   "Enabling type discrimination on C function pointers">;
 defm ptrauth_block_descriptor_pointers : OptInCC1FFlag<"ptrauth-block-descriptor-pointers",

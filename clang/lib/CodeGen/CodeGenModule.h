@@ -613,6 +613,11 @@ private:
 
   llvm::DenseMap<GlobalDecl, uint16_t> PtrAuthDiscriminatorHashes;
 
+  llvm::DenseMap<const CXXRecordDecl *, std::optional<PointerAuthQualifier>>
+      VTablePtrAuthInfos;
+  std::optional<PointerAuthQualifier>
+  computeVTPointerAuthentication(const CXXRecordDecl *thisClass);
+
 public:
   CodeGenModule(ASTContext &C, IntrusiveRefCntPtr<llvm::vfs::FileSystem> FS,
                 const HeaderSearchOptions &headersearchopts,
@@ -986,6 +991,13 @@ public:
   getPointerAuthOtherDiscriminator(const PointerAuthSchema &schema,
                                    GlobalDecl schemaDecl, QualType schemaType);
   uint16_t getPointerAuthDeclDiscriminator(GlobalDecl GD);
+  std::optional<CGPointerAuthInfo>
+  getVTablePointerAuthInfo(CodeGenFunction *context,
+                           const CXXRecordDecl *record,
+                           llvm::Value *storageAddress);
+
+  std::optional<PointerAuthQualifier>
+  getVTablePointerAuthentication(const CXXRecordDecl *thisClass);
 
   bool isFunctionPointerAuthenticated(QualType FunctionPointerTy,
                                       const Expr *Key,
