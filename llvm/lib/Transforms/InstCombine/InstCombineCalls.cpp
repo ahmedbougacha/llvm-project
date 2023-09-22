@@ -36,7 +36,6 @@
 #include "llvm/IR/DebugInfo.h"
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/Function.h"
-#include "llvm/IR/GlobalPtrAuthInfo.h"
 #include "llvm/IR/GlobalVariable.h"
 #include "llvm/IR/InlineAsm.h"
 #include "llvm/IR/InstrTypes.h"
@@ -2633,18 +2632,17 @@ Instruction *InstCombinerImpl::visitCallInst(CallInst &CI) {
       if (PIC->getOpcode() != Instruction::PtrToInt)
         break;
 
-      auto PAI = GlobalPtrAuthInfo::analyze(PIC->getOperand(0));
+      auto PAI = dyn_cast<ConstantPtrAuth>(PIC->getOperand(0));
       if (!PAI || !PAI->isCompatibleWith(Key, Disc, DL))
         break;
 
       if (NeedSign && isa<ConstantInt>(II->getArgOperand(4))) {
         auto Key = cast<ConstantInt>(II->getArgOperand(3));
         auto Disc = cast<ConstantInt>(II->getArgOperand(4));
-        auto AddrDisc = ConstantInt::get(Disc->getType(), 0);
+        auto AddrDisc = ConstantPointerNull::get(Builder.getPtrTy());
         replaceInstUsesWith(*II, ConstantExpr::getPointerCast(
-                                     GlobalPtrAuthInfo::create(
-                                         *II->getModule(), PAI->getPointer(),
-                                         Key, AddrDisc, Disc),
+                                     ConstantPtrAuth::get(PAI->getPointer(),
+                                                          Key, AddrDisc, Disc),
                                      II->getType()));
         eraseInstFromFunction(*II);
         return nullptr;
