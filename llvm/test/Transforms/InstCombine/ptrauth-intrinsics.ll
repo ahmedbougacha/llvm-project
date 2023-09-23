@@ -24,9 +24,7 @@ define i64 @test_ptrauth_nop_global() {
 
 define i64 @test_ptrauth_nop_global_addrdisc() {
 ; CHECK-LABEL: @test_ptrauth_nop_global_addrdisc(
-; CHECK-NEXT:    [[BLENDED:%.*]] = call i64 @llvm.ptrauth.blend(i64 ptrtoint (ptr @foo to i64), i64 1234)
-; CHECK-NEXT:    [[AUTHED:%.*]] = call i64 @llvm.ptrauth.auth(i64 ptrtoint (ptr ptrauth (ptr @foo, i32 1, ptr @foo, i64 1234) to i64), i32 1, i64 [[BLENDED]])
-; CHECK-NEXT:    ret i64 [[AUTHED]]
+; CHECK-NEXT:    ret i64 ptrtoint (ptr @foo to i64)
 ;
   %addr = ptrtoint void()* @foo to i64
   %blended = call i64 @llvm.ptrauth.blend(i64 %addr, i64 1234)

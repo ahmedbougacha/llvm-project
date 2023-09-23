@@ -4022,18 +4022,16 @@ Instruction *InstCombinerImpl::visitCallBase(CallBase &Call) {
 bool InstCombinerImpl::transformConstExprCastCall(CallBase &Call) {
   auto *CalleeC = Call.getCalledOperand()->stripPointerCasts();
 
-  // The callee can also be an llvm.ptrauth "cast".  Try to unwrap it.
+  // The callee can also be a ptrauth constant.  Try to unwrap it.
   bool DropPtrauthBundle = false;
-  if (auto PAI = GlobalPtrAuthInfo::analyze(CalleeC)) {
+  if (auto PAI = dyn_cast<ConstantPtrAuth>(CalleeC)) {
     auto *CalleePtr = PAI->getPointer()->stripPointerCasts();
     // If the global isn't wrapping a function pointer, there's nothing to do.
     if (!isa<Function>(CalleePtr))
       return false;
 
-    // If it is an llvm.ptrauth gv, the ptrauth bundle must match.
-    auto PAB = Call.getOperandBundle("ptrauth");
-
     // If there's no bundle, this is incorrect, but let it crash at runtime.
+    auto PAB = Call.getOperandBundle("ptrauth");
     if (!PAB)
       return false;
 
