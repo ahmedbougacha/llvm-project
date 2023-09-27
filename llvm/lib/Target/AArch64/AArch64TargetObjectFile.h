@@ -14,7 +14,7 @@
 #include "Utils/AArch64BaseInfo.h"
 
 namespace llvm {
-class GlobalPtrAuthInfo;
+class ConstantPtrAuth;
 
 /// This implementation is used for AArch64 ELF targets (Linux in particular).
 class AArch64_ELFTargetObjectFile : public TargetLoweringObjectFileELF {
@@ -63,7 +63,7 @@ public:
                                  uint16_t Discriminator) const;
 
   MCSymbol *getAuthPtrSlotSymbol(const TargetMachine &TM, MachineModuleInfo *MMI,
-                                 const GlobalPtrAuthInfo &PAI) const;
+                                 const ConstantPtrAuth &CPA) const;
 };
 
 /// This implementation is used for AArch64 COFF targets.

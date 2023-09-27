@@ -21,7 +21,6 @@
 #include "llvm/CodeGen/MachineModuleInfo.h"
 #include "llvm/CodeGen/MachineModuleInfoImpls.h"
 #include "llvm/IR/Constants.h"
-#include "llvm/IR/GlobalPtrAuthInfo.h"
 #include "llvm/IR/Mangler.h"
 #include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCExpr.h"
@@ -46,12 +45,15 @@ static MCSymbol *getAuthGVStub(const GlobalVariable *GVB, AsmPrinter &Printer) {
   auto &TLOF = static_cast<const AArch64_MachoTargetObjectFile &>(
       Printer.getObjFileLowering());
 
-  return TLOF.getAuthPtrSlotSymbol(Printer.TM, Printer.MMI,
-                                   *GlobalPtrAuthInfo::analyze(GVB));
+  // FIXME
+  return nullptr;
+//  return TLOF.getAuthPtrSlotSymbol(Printer.TM, Printer.MMI,
+//                                   *GlobalPtrAuthInfo::analyze(GVB));
 }
 
 MCSymbol *
 AArch64MCInstLower::GetGlobalAddressSymbol(const MachineOperand &MO) const {
+  // FIXME
   if (const GlobalVariable *GVB = dyn_cast<GlobalVariable>(MO.getGlobal()))
     if (GVB->getSection() == "llvm.ptrauth")
       return getAuthGVStub(GVB, Printer);

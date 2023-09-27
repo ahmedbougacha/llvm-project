@@ -12,7 +12,7 @@
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/BinaryFormat/Dwarf.h"
 #include "llvm/CodeGen/MachineModuleInfoImpls.h"
-#include "llvm/IR/GlobalPtrAuthInfo.h"
+#include "llvm/IR/Constants.h"
 #include "llvm/IR/Mangler.h"
 #include "llvm/MC/MCAsmInfo.h"
 #include "llvm/MC/MCContext.h"
@@ -138,12 +138,12 @@ MCSymbol *AArch64_MachoTargetObjectFile::getAuthPtrSlotSymbol(
 
 MCSymbol *AArch64_MachoTargetObjectFile::getAuthPtrSlotSymbol(
     const TargetMachine &TM, MachineModuleInfo *MMI,
-    const GlobalPtrAuthInfo &PAI) const {
+    const ConstantPtrAuth &CPA) const {
   const DataLayout &DL = MMI->getModule()->getDataLayout();
 
   // Figure out the base symbol and the addend, if any.
   APInt Offset(64, 0);
-  const Value *BaseGV = PAI.getPointer()->stripAndAccumulateConstantOffsets(
+  const Value *BaseGV = CPA.getPointer()->stripAndAccumulateConstantOffsets(
       DL, Offset, /*AllowNonInbounds=*/true);
 
   auto *BaseGVB = dyn_cast<GlobalValue>(BaseGV);
@@ -151,26 +151,22 @@ MCSymbol *AArch64_MachoTargetObjectFile::getAuthPtrSlotSymbol(
   // If we can't understand the referenced ConstantExpr, there's nothing
   // else we can do: emit an error.
   if (!BaseGVB) {
-    BaseGVB = PAI.getGV();
-
     std::string Buf;
     raw_string_ostream OS(Buf);
-    OS << "Couldn't resolve target base/addend of llvm.ptrauth global '"
-      << *BaseGVB << "'";
-    BaseGVB->getContext().emitError(OS.str());
+    OS << "Couldn't resolve target base/addend of ptrauth constant";
+    //BaseGVB->getContext().emitError(OS.str());
   }
 
-  uint16_t Discriminator = PAI.getDiscriminator()->getZExtValue();
+  uint16_t Discriminator = CPA.getDiscriminator()->getZExtValue();
 
-  if (PAI.hasAddressDiversity()) {
+  if (CPA.hasAddressDiversity()) {
     std::string Buf;
     raw_string_ostream OS(Buf);
-    OS << "Invalid instruction reference to address-diversified ptrauth global"
-      << *BaseGVB << "'";
-    BaseGVB->getContext().emitError(OS.str());
+    OS << "Invalid instruction reference to address-diversified ptrauth constant";
+    //BaseGVB->getContext().emitError(OS.str());
   }
 
-  auto *KeyC = PAI.getKey();
+  auto *KeyC = CPA.getKey();
   assert(isUInt<2>(KeyC->getZExtValue()) && "Invalid PAC Key ID");
   uint32_t Key = KeyC->getZExtValue();
   int64_t OffsetV = Offset.getSExtValue();
