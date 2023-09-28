@@ -71,7 +71,6 @@
 #include "llvm/IR/EHPersonalities.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/GetElementPtrTypeIterator.h"
-#include "llvm/IR/GlobalPtrAuthInfo.h"
 #include "llvm/IR/GlobalVariable.h"
 #include "llvm/IR/InlineAsm.h"
 #include "llvm/IR/InstrTypes.h"
@@ -1793,18 +1792,15 @@ SDValue SelectionDAGBuilder::getValueImpl(const Value *V) {
     if (const ConstantInt *CI = dyn_cast<ConstantInt>(C))
       return DAG.getConstant(*CI, getCurSDLoc(), VT);
 
-    if (const GlobalValue *GV = dyn_cast<GlobalValue>(C)) {
-      if (const GlobalVariable *GVB = dyn_cast<GlobalVariable>(GV)) {
-        if (GVB->getSection() == "llvm.ptrauth") {
-          auto PAI = GlobalPtrAuthInfo::analyze(GVB);
-          return DAG.getNode(ISD::PtrAuthGlobalAddress, getCurSDLoc(), VT,
-                             getValue(PAI->getPointer()),
-                             getValue(PAI->getKey()),
-                             getValue(PAI->getAddrDiscriminator()),
-                             getValue(PAI->getDiscriminator()));
-        }
-      }
+    if (const GlobalValue *GV = dyn_cast<GlobalValue>(C))
       return DAG.getGlobalAddress(GV, getCurSDLoc(), VT);
+
+    if (const ConstantPtrAuth *CPA = dyn_cast<ConstantPtrAuth>(C)) {
+      return DAG.getNode(ISD::PtrAuthGlobalAddress, getCurSDLoc(), VT,
+                         getValue(CPA->getPointer()),
+                         getValue(CPA->getKey()),
+                         getValue(CPA->getAddrDiscriminator()),
+                         getValue(CPA->getDiscriminator()));
     }
 
     if (isa<ConstantPointerNull>(C)) {

@@ -129,13 +129,13 @@ define i8* @test_global_addr_disc() {
 ; LOAD-LABEL: test_global_addr_disc:
 ; LOAD:       ; %bb.0:
 ; LOAD-NEXT:  Lloh8:
-; LOAD-NEXT:    adrp x8, _g.ref.da.42.addr@PAGE
-; LOAD-NEXT:  Lloh9:
-; LOAD-NEXT:    add x8, x8, _g.ref.da.42.addr@PAGEOFF
-; LOAD-NEXT:  Lloh10:
 ; LOAD-NEXT:    adrp x16, l_g$auth_ptr$da$42@PAGE
-; LOAD-NEXT:  Lloh11:
+; LOAD-NEXT:  Lloh9:
 ; LOAD-NEXT:    ldr x16, [x16, l_g$auth_ptr$da$42@PAGEOFF]
+; LOAD-NEXT:  Lloh10:
+; LOAD-NEXT:    adrp x8, _g.ref.da.42.addr@PAGE
+; LOAD-NEXT:  Lloh11:
+; LOAD-NEXT:    add x8, x8, _g.ref.da.42.addr@PAGEOFF
 ; LOAD-NEXT:    mov x17, #42
 ; LOAD-NEXT:    autda x16, x17
 ; LOAD-NEXT:    mov x17, x16
@@ -151,8 +151,8 @@ define i8* @test_global_addr_disc() {
 ; LOAD-NEXT:  Lresign_end_0:
 ; LOAD-NEXT:    mov x0, x16
 ; LOAD-NEXT:    ret
-; LOAD-NEXT:    .loh AdrpLdr Lloh10, Lloh11
-; LOAD-NEXT:    .loh AdrpAdd Lloh8, Lloh9
+; LOAD-NEXT:    .loh AdrpAdd Lloh10, Lloh11
+; LOAD-NEXT:    .loh AdrpLdr Lloh8, Lloh9
   ret ptr ptrauth (ptr @g, i32 2, ptr @g.ref.da.42.addr, i64 42)
 }
 
