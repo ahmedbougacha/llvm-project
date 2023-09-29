@@ -86,7 +86,7 @@ continuebb:
 ; CHECK-NEXT:  .byte 0                           ;   On action: cleanup
 
 define i32 @test_invoke_ia_0_direct() #0 personality ptr @__gxx_personality_v0 {
-  %tmp0 = invoke i32 @baz.ptrauth() [ "ptrauth"(i32 0, i64 0) ] to label %continuebb
+  %tmp0 = invoke i32 ptrauth(ptr @baz, i32 0, ptr null, i64 0)() [ "ptrauth"(i32 0, i64 0) ] to label %continuebb
             unwind label %unwindbb
 
 unwindbb:
@@ -98,8 +98,6 @@ continuebb:
   call void @foo()
   ret i32 %tmp0
 }
-
-@baz.ptrauth = private constant { ptr, i32, i64, i64 } { ptr @baz, i32 0, i64 0, i64 0 }, section "llvm.ptrauth"
 
 @_ZTIPKc = external constant ptr
 @hello_str = private unnamed_addr constant [6 x i8] c"hello\00", align 1

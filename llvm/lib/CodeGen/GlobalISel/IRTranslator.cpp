@@ -2654,8 +2654,8 @@ bool IRTranslator::translateCallBase(const CallBase &CB,
     Value *Key = PAB->Inputs[0];
     Value *Discriminator = PAB->Inputs[1];
 
-    auto CalleePAI = GlobalPtrAuthInfo::analyze(CB.getCalledOperand());
-    if (!CalleePAI || !CalleePAI->isCompatibleWith(Key, Discriminator, *DL)) {
+    auto CalleeCPA = dyn_cast<ConstantPtrAuth>(CB.getCalledOperand());
+    if (!CalleeCPA || !CalleeCPA->isCompatibleWith(Key, Discriminator, *DL)) {
       Register DiscReg = getOrCreateVReg(*Discriminator);
       PAI = CallLowering::PointerAuthInfo{
           DiscReg, cast<ConstantInt>(Key)->getZExtValue()};

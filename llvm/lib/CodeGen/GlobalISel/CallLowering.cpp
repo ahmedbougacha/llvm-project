@@ -150,8 +150,8 @@ bool CallLowering::lowerCall(MachineIRBuilder &MIRBuilder, const CallBase &CB,
   if (CB.countOperandBundlesOfType(LLVMContext::OB_ptrauth) && !PAI) {
     // This is a direct call where the IRTranslator has determined the callee is
     // compatible with the requested key & discriminator.
-    auto GPAI = GlobalPtrAuthInfo::analyze(CB.getCalledOperand());
-    Constant *Callee = GPAI->getPointer()->stripPointerCasts();
+    auto CPA = dyn_cast<ConstantPtrAuth>(CB.getCalledOperand());
+    Constant *Callee = CPA->getPointer()->stripPointerCasts();
     Info.Callee = MachineOperand::CreateGA(cast<GlobalValue>(Callee), 0);
   } else if (const Function *F = dyn_cast<Function>(CalleeV)) {
     if (F->hasFnAttribute(Attribute::NonLazyBind)) {
