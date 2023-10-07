@@ -8,35 +8,9 @@ target datalayout = "e-m:o-i64:64-i128:128-n32:64-S128"
 @g_weak = extern_weak global i32
 @g_strong_def = constant i32 42
 
-@g.ptrauth.ia.0 = private constant { ptr, i32, i64, i64 } { ptr @g, i32 0, i64 0, i64 0 }, section "llvm.ptrauth"
-
-@g.ptrauth.ia.42 = private constant { ptr, i32, i64, i64 } { ptr @g, i32 0, i64 0, i64 42 }, section "llvm.ptrauth"
-
-@g.ptrauth.ib.0 = private constant { ptr, i32, i64, i64 } { ptr @g, i32 1, i64 0, i64 0 }, section "llvm.ptrauth"
-
-@g.ptrauth.da.42.addr = private constant { ptr, i32, i64, i64 } { ptr @g, i32 2, i64 ptrtoint (ptr @g.ref.da.42.addr to i64), i64 42 }, section "llvm.ptrauth"
-@g.ref.da.42.addr = constant ptr @g.ptrauth.da.42.addr
-
-@g.offset.ptrauth.da.0 = private constant { ptr, i32, i64, i64 } { i8* getelementptr (i8, ptr @g, i64 16), i32 2, i64 0, i64 0 }, section "llvm.ptrauth"
-
-@g.big_offset.ptrauth.da.0 = private constant { ptr, i32, i64, i64 } { i8* getelementptr (i8, ptr @g, i64 add (i64 2147483648, i64 65537)), i32 2, i64 0, i64 0 }, section "llvm.ptrauth"
-
-@g_weak.ptrauth.ia.42 = private constant { ptr, i32, i64, i64 } { ptr @g_weak, i32 0, i64 0, i64 42 }, section "llvm.ptrauth"
-
-@g_strong_def.ptrauth.da.0 = private constant { ptr, i32, i64, i64 } { ptr @g_strong_def, i32 2, i64 0, i64 0 }, section "llvm.ptrauth"
-
 ; Check code references.
 
 define i8* @test_global_zero_disc() {
-; LOAD-LABEL: test_global_zero_disc:
-; LOAD:       ; %bb.0:
-; LOAD-NEXT:  Lloh0:
-; LOAD-NEXT:    adrp x0, l_g$auth_ptr$ia$0@PAGE
-; LOAD-NEXT:  Lloh1:
-; LOAD-NEXT:    ldr x0, [x0, l_g$auth_ptr$ia$0@PAGEOFF]
-; LOAD-NEXT:    ret
-; LOAD-NEXT:    .loh AdrpLdr Lloh0, Lloh1
-;
 ; DYN-LABEL: test_global_zero_disc:
 ; DYN:       ; %bb.0:
 ; DYN-NEXT:  Lloh0:
@@ -47,20 +21,19 @@ define i8* @test_global_zero_disc() {
 ; DYN-NEXT:    mov x0, x16
 ; DYN-NEXT:    ret
 ; DYN-NEXT:    .loh AdrpLdrGot Lloh0, Lloh1
-  %tmp0 = bitcast { i8*, i32, i64, i64 }* @g.ptrauth.ia.0 to i8*
-  ret i8* %tmp0
+;
+; LOAD-LABEL: test_global_zero_disc:
+; LOAD:       ; %bb.0:
+; LOAD-NEXT:  Lloh0:
+; LOAD-NEXT:    adrp x0, l_g$auth_ptr$ia$0@PAGE
+; LOAD-NEXT:  Lloh1:
+; LOAD-NEXT:    ldr x0, [x0, l_g$auth_ptr$ia$0@PAGEOFF]
+; LOAD-NEXT:    ret
+; LOAD-NEXT:    .loh AdrpLdr Lloh0, Lloh1
+  ret ptr ptrauth (ptr @g, i32 0, ptr null, i64 0)
 }
 
 define i8* @test_global_offset_zero_disc() {
-; LOAD-LABEL: test_global_offset_zero_disc:
-; LOAD:       ; %bb.0:
-; LOAD-NEXT:  Lloh2:
-; LOAD-NEXT:    adrp x0, l_g$16$auth_ptr$da$0@PAGE
-; LOAD-NEXT:  Lloh3:
-; LOAD-NEXT:    ldr x0, [x0, l_g$16$auth_ptr$da$0@PAGEOFF]
-; LOAD-NEXT:    ret
-; LOAD-NEXT:    .loh AdrpLdr Lloh2, Lloh3
-;
 ; DYN-LABEL: test_global_offset_zero_disc:
 ; DYN:       ; %bb.0:
 ; DYN-NEXT:  Lloh2:
@@ -72,8 +45,16 @@ define i8* @test_global_offset_zero_disc() {
 ; DYN-NEXT:    mov x0, x16
 ; DYN-NEXT:    ret
 ; DYN-NEXT:    .loh AdrpLdrGot Lloh2, Lloh3
-  %tmp0 = bitcast { i8*, i32, i64, i64 }* @g.offset.ptrauth.da.0 to i8*
-  ret i8* %tmp0
+;
+; LOAD-LABEL: test_global_offset_zero_disc:
+; LOAD:       ; %bb.0:
+; LOAD-NEXT:  Lloh2:
+; LOAD-NEXT:    adrp x0, l_g$16$auth_ptr$da$0@PAGE
+; LOAD-NEXT:  Lloh3:
+; LOAD-NEXT:    ldr x0, [x0, l_g$16$auth_ptr$da$0@PAGEOFF]
+; LOAD-NEXT:    ret
+; LOAD-NEXT:    .loh AdrpLdr Lloh2, Lloh3
+  ret ptr ptrauth (i8* getelementptr (i8, ptr @g, i64 16), i32 2, ptr null, i64 0)
 }
 
 ; For large offsets, materializing it can take up to 3 add instructions.
@@ -97,20 +78,10 @@ define i8* @test_global_big_offset_zero_disc() {
 ; CHECK-NEXT:    mov x0, x16
 ; CHECK-NEXT:    ret
 ; CHECK-NEXT:    .loh AdrpLdrGot Lloh4, Lloh5
-  %tmp0 = bitcast { i8*, i32, i64, i64 }* @g.big_offset.ptrauth.da.0 to i8*
-  ret i8* %tmp0
+  ret ptr ptrauth (i8* getelementptr (i8, ptr @g, i64 add (i64 2147483648, i64 65537)), i32 2, ptr null, i64 0)
 }
 
 define i8* @test_global_disc() {
-; LOAD-LABEL: test_global_disc:
-; LOAD:       ; %bb.0:
-; LOAD-NEXT:  Lloh6:
-; LOAD-NEXT:    adrp x0, l_g$auth_ptr$ia$42@PAGE
-; LOAD-NEXT:  Lloh7:
-; LOAD-NEXT:    ldr x0, [x0, l_g$auth_ptr$ia$42@PAGEOFF]
-; LOAD-NEXT:    ret
-; LOAD-NEXT:    .loh AdrpLdr Lloh6, Lloh7
-;
 ; DYN-LABEL: test_global_disc:
 ; DYN:       ; %bb.0:
 ; DYN-NEXT:  Lloh6:
@@ -122,39 +93,21 @@ define i8* @test_global_disc() {
 ; DYN-NEXT:    mov x0, x16
 ; DYN-NEXT:    ret
 ; DYN-NEXT:    .loh AdrpLdrGot Lloh6, Lloh7
-  %tmp0 = bitcast { i8*, i32, i64, i64 }* @g.ptrauth.ia.42 to i8*
-  ret i8* %tmp0
+;
+; LOAD-LABEL: test_global_disc:
+; LOAD:       ; %bb.0:
+; LOAD-NEXT:  Lloh6:
+; LOAD-NEXT:    adrp x0, l_g$auth_ptr$ia$42@PAGE
+; LOAD-NEXT:  Lloh7:
+; LOAD-NEXT:    ldr x0, [x0, l_g$auth_ptr$ia$42@PAGEOFF]
+; LOAD-NEXT:    ret
+; LOAD-NEXT:    .loh AdrpLdr Lloh6, Lloh7
+  ret ptr ptrauth (ptr @g, i32 0, ptr null, i64 42)
 }
 
+@g.ref.da.42.addr = constant ptr ptrauth (ptr @g, i32 2, ptr @g.ref.da.42.addr, i64 42)
+
 define i8* @test_global_addr_disc() {
-; LOAD-LABEL: test_global_addr_disc:
-; LOAD:       ; %bb.0:
-; LOAD-NEXT:  Lloh8:
-; LOAD-NEXT:    adrp x16, l_g$auth_ptr$da$42@PAGE
-; LOAD-NEXT:  Lloh9:
-; LOAD-NEXT:    ldr x16, [x16, l_g$auth_ptr$da$42@PAGEOFF]
-; LOAD-NEXT:  Lloh10:
-; LOAD-NEXT:    adrp x8, _g.ref.da.42.addr@PAGE
-; LOAD-NEXT:  Lloh11:
-; LOAD-NEXT:    add x8, x8, _g.ref.da.42.addr@PAGEOFF
-; LOAD-NEXT:    mov x17, #42
-; LOAD-NEXT:    autda x16, x17
-; LOAD-NEXT:    mov x17, x16
-; LOAD-NEXT:    xpacd x17
-; LOAD-NEXT:    cmp x16, x17
-; LOAD-NEXT:    b.eq Lauth_success_0
-; LOAD-NEXT:    mov x16, x17
-; LOAD-NEXT:    b Lresign_end_0
-; LOAD-NEXT:  Lauth_success_0:
-; LOAD-NEXT:    mov x17, x8
-; LOAD-NEXT:    movk x17, #42, lsl #48
-; LOAD-NEXT:    pacda x16, x17
-; LOAD-NEXT:  Lresign_end_0:
-; LOAD-NEXT:    mov x0, x16
-; LOAD-NEXT:    ret
-; LOAD-NEXT:    .loh AdrpAdd Lloh10, Lloh11
-; LOAD-NEXT:    .loh AdrpLdr Lloh8, Lloh9
-;
 ; DYN-LABEL: test_global_addr_disc:
 ; DYN:       ; %bb.0:
 ; DYN-NEXT:  Lloh8:
@@ -172,13 +125,51 @@ define i8* @test_global_addr_disc() {
 ; DYN-NEXT:    ret
 ; DYN-NEXT:    .loh AdrpLdrGot Lloh10, Lloh11
 ; DYN-NEXT:    .loh AdrpAdd Lloh8, Lloh9
-  %tmp0 = bitcast { i8*, i32, i64, i64 }* @g.ptrauth.da.42.addr to i8*
-  ret i8* %tmp0
+;
+; LOAD-LABEL: test_global_addr_disc:
+; LOAD:       ; %bb.0:
+; LOAD-NEXT:  Lloh8:
+; LOAD-NEXT:    adrp x8, _g.ref.da.42.addr@PAGE
+; LOAD-NEXT:  Lloh9:
+; LOAD-NEXT:    add x8, x8, _g.ref.da.42.addr@PAGEOFF
+; LOAD-NEXT:  Lloh10:
+; LOAD-NEXT:    adrp x16, l_g$auth_ptr$da$42@PAGE
+; LOAD-NEXT:  Lloh11:
+; LOAD-NEXT:    ldr x16, [x16, l_g$auth_ptr$da$42@PAGEOFF]
+; LOAD-NEXT:    mov x17, #42
+; LOAD-NEXT:    autda x16, x17
+; LOAD-NEXT:    mov x17, x16
+; LOAD-NEXT:    xpacd x17
+; LOAD-NEXT:    cmp x16, x17
+; LOAD-NEXT:    b.eq Lauth_success_0
+; LOAD-NEXT:    mov x16, x17
+; LOAD-NEXT:    b Lresign_end_0
+; LOAD-NEXT:  Lauth_success_0:
+; LOAD-NEXT:    mov x17, x8
+; LOAD-NEXT:    movk x17, #42, lsl #48
+; LOAD-NEXT:    pacda x16, x17
+; LOAD-NEXT:  Lresign_end_0:
+; LOAD-NEXT:    mov x0, x16
+; LOAD-NEXT:    ret
+; LOAD-NEXT:    .loh AdrpLdr Lloh10, Lloh11
+; LOAD-NEXT:    .loh AdrpAdd Lloh8, Lloh9
+  ret ptr ptrauth (ptr @g, i32 2, ptr @g.ref.da.42.addr, i64 42)
 }
 
 ; Process-specific keys can't use __DATA,__auth_ptr
 
 define i8* @test_global_process_specific() {
+; DYN-LABEL: test_global_process_specific:
+; DYN:       ; %bb.0:
+; DYN-NEXT:  Lloh12:
+; DYN-NEXT:    adrp x16, _g@GOTPAGE
+; DYN-NEXT:  Lloh13:
+; DYN-NEXT:    ldr x16, [x16, _g@GOTPAGEOFF]
+; DYN-NEXT:    pacizb x16
+; DYN-NEXT:    mov x0, x16
+; DYN-NEXT:    ret
+; DYN-NEXT:    .loh AdrpLdrGot Lloh12, Lloh13
+;
 ; LOAD-LABEL: test_global_process_specific:
 ; LOAD:       ; %bb.0:
 ; LOAD-NEXT:  Lloh12:
@@ -198,19 +189,7 @@ define i8* @test_global_process_specific() {
 ; LOAD-NEXT:    mov x0, x16
 ; LOAD-NEXT:    ret
 ; LOAD-NEXT:    .loh AdrpLdr Lloh12, Lloh13
-;
-; DYN-LABEL: test_global_process_specific:
-; DYN:       ; %bb.0:
-; DYN-NEXT:  Lloh12:
-; DYN-NEXT:    adrp x16, _g@GOTPAGE
-; DYN-NEXT:  Lloh13:
-; DYN-NEXT:    ldr x16, [x16, _g@GOTPAGEOFF]
-; DYN-NEXT:    pacizb x16
-; DYN-NEXT:    mov x0, x16
-; DYN-NEXT:    ret
-; DYN-NEXT:    .loh AdrpLdrGot Lloh12, Lloh13
-  %tmp0 = bitcast { i8*, i32, i64, i64 }* @g.ptrauth.ib.0 to i8*
-  ret i8* %tmp0
+  ret ptr ptrauth (ptr @g, i32 1, ptr null, i64 0)
 }
 
 ; weak symbols can't be assumed to be non-nil.  Use __DATA,__auth_ptr always.
@@ -226,8 +205,7 @@ define i8* @test_global_weak() {
 ; CHECK-NEXT:    ldr x0, [x0, l_g_weak$auth_ptr$ia$42@PAGEOFF]
 ; CHECK-NEXT:    ret
 ; CHECK-NEXT:    .loh AdrpLdr Lloh14, Lloh15
-  %tmp0 = bitcast { i8*, i32, i64, i64 }* @g_weak.ptrauth.ia.42 to i8*
-  ret i8* %tmp0
+  ret ptr ptrauth (ptr @g_weak, i32 0, ptr null, i64 42)
 }
 
 ; Non-external symbols don't need to be accessed through the GOT: always prefer
@@ -244,6 +222,5 @@ define i8* @test_global_strong_def() {
 ; CHECK-NEXT:    mov x0, x16
 ; CHECK-NEXT:    ret
 ; CHECK-NEXT:    .loh AdrpAdd Lloh16, Lloh17
-  %tmp0 = bitcast { i8*, i32, i64, i64 }* @g_strong_def.ptrauth.da.0 to i8*
-  ret i8* %tmp0
+  ret ptr ptrauth (ptr @g_strong_def, i32 2, ptr null, i64 0)
 }
