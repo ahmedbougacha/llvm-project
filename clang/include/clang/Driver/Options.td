@@ -4180,6 +4180,10 @@ defm ptrauth_returns : OptInCC1FFlag<"ptrauth-returns",
   "Enable signing and authentication of return addresses">;
 defm ptrauth_auth_traps : OptInCC1FFlag<"ptrauth-auth-traps",
   "Enable traps on authentication failures">;
+defm ptrauth_calls : OptInCC1FFlag<"ptrauth-calls",
+  "Enable signing and authentication of all indirect calls">;
+defm ptrauth_function_pointer_type_discrimination : OptInCC1FFlag<"ptrauth-function-pointer-type-discrimination",
+  "Enabling type discrimination on C function pointers">;
 }
 
 let Group = f_Group in {

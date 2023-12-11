@@ -2255,7 +2255,8 @@ RValue CodeGenFunction::emitBuiltinOSLogFormat(const CallExpr &E) {
 
   // Ignore argument 1, the format string. It is not currently used.
   CallArgList Args;
-  Args.add(RValue::get(BufAddr.emitRawPointer(*this)), Ctx.VoidPtrTy);
+  Args.add(RValue::get(getAsNaturalPointerTo(BufAddr, Ctx.VoidTy)),
+           Ctx.VoidPtrTy);
 
   for (const auto &Item : Layout.Items) {
     int Size = Item.getSizeByte();
@@ -6079,8 +6080,7 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
   // If this is a predefined lib function (e.g. malloc), emit the call
   // using exactly the normal call path.
   if (getContext().BuiltinInfo.isPredefinedLibFunction(BuiltinID))
-    return emitLibraryCall(
-        *this, FD, E, cast<llvm::Constant>(EmitScalarExpr(E->getCallee())));
+    return emitLibraryCall(*this, FD, E, CGM.getRawFunctionPointer(FD));
 
   // Check that a call to a target specific builtin has the correct target
   // features.
