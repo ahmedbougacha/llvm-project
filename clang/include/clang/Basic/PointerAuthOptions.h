@@ -31,6 +31,10 @@ constexpr unsigned PointerAuthKeyNone = -1;
 /// is ptrauth_string_discriminator("block_descriptor")
 constexpr uint16_t BlockDescriptorConstantDiscriminator = 0xC0BB;
 
+/// Constant discriminator to be used with method list pointers. The value is
+/// ptrauth_string_discriminator("method_list_t")
+constexpr uint16_t MethodListPointerConstantDiscriminator = 0xC310;
+
 class PointerAuthSchema {
 public:
   enum class Kind : unsigned {
@@ -161,6 +165,12 @@ struct PointerAuthOptions {
 
   /// The ABI for pointers to block descriptors.
   PointerAuthSchema BlockDescriptorPointers;
+
+  /// The ABI for Objective-C method lists.
+  PointerAuthSchema ObjCMethodListFunctionPointers;
+
+  /// The ABI for a reference to an Objective-C method list in _class_ro_t.
+  PointerAuthSchema ObjCMethodListPointer;
 };
 
 } // end namespace clang
