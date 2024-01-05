@@ -15,6 +15,8 @@ RUN: %clangxx_profuse=%t-icall2.profdata -O2 -Rpass=pgo-icall-prom  -c -o %t.2.u
 FIXME: Relies on vtable layout
 XFAIL: target={{.*msvc.*}}
 
+# Indirect calls cannot be promoted to direct calls when they use arm64e ptrauth bundldes
+UNSUPPORTED: arm64e-target-arch
 
 # CHECK: Promote indirect call to
 
