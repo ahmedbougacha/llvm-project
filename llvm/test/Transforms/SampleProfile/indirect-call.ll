@@ -134,6 +134,18 @@ define void @branch_prof_valid(ptr %t0) #0 !dbg !33 {
   ret void
 }
 
+; CHECK-LABEL: @branch_prof_ptrauth
+; Make sure that we don't attempt ICP when the call includes an authentication
+; instruction.
+define void @branch_prof_ptrauth(ptr %t0) #0 !dbg !36 {
+  %t1 = alloca ptr
+  store ptr %t0, ptr %t1
+  %t2 = load ptr, ptr %t1
+  ; CHECK-NOT: br i1
+  call void %t2() [ "ptrauth"(i32 0, i64 0) ], !dbg !37
+  ret void
+}
+
 @x = global i32 0, align 4
 @y = global ptr null, align 8
 
@@ -234,3 +246,5 @@ attributes #0 = {"use-sample-profile"}
 !33 = distinct !DISubprogram(name: "branch_prof_valid", scope: !1, file: !1, line: 25, unit: !0)
 !34 = !DILocation(line: 27, scope: !33)
 !35 = distinct !DISubprogram(name: "foo_inline3", scope: !1, file: !1, line: 29, unit: !0)
+!36 = distinct !DISubprogram(name: "branch_prof_ptrauth", scope: !1, file: !1, line: 30, unit: !0)
+!37 = !DILocation(line: 32, scope: !36)

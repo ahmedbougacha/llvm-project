@@ -477,6 +477,14 @@ bool llvm::isLegalToPromote(const CallBase &CB, Function *Callee,
     }
   }
 
+  // Check if the indirect call is authenticated using a ptrauth bundle. If so,
+  // we cannot promote it to a direct call
+  if (CB.countOperandBundlesOfType(LLVMContext::OB_ptrauth)) {
+    if (FailureReason)
+      *FailureReason = "Ptrauth bundle found";
+    return false;
+  }
+
   return true;
 }
 
