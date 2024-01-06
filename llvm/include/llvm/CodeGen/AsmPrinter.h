@@ -38,6 +38,7 @@ class BasicBlock;
 class BlockAddress;
 class Constant;
 class ConstantArray;
+class ConstantPtrAuth;
 class DataLayout;
 class DIE;
 class DIEAbbrev;
@@ -75,8 +76,6 @@ class StringRef;
 class TargetLoweringObjectFile;
 class TargetMachine;
 class Twine;
-
-class GlobalPtrAuthInfo;
 
 namespace remarks {
 class RemarkStreamer;
@@ -587,11 +586,12 @@ public:
     emitGlobalConstant(DL, CV);
   }
 
-  /// Lower the specified "llvm.ptrauth" GlobalVariable to an MCExpr.
+  /// Lower the specified ptrauth constant to an MCExpr.
   virtual const MCExpr *
-  lowerPtrAuthGlobalConstant(const GlobalPtrAuthInfo &PAI) {
-    report_fatal_error("llvm.ptrauth global lowering not implemented");
+  lowerConstantPtrAuth(const ConstantPtrAuth &CPA) {
+    report_fatal_error("ptrauth constant lowering not implemented");
   }
+
 
   /// Return true if the basic block has exactly one predecessor and the control
   /// transfer mechanism between the predecessor and this block is a

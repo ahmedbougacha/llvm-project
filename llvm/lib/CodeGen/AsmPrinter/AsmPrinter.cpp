@@ -75,7 +75,6 @@
 #include "llvm/IR/GlobalAlias.h"
 #include "llvm/IR/GlobalIFunc.h"
 #include "llvm/IR/GlobalObject.h"
-#include "llvm/IR/GlobalPtrAuthInfo.h"
 #include "llvm/IR/GlobalValue.h"
 #include "llvm/IR/GlobalVariable.h"
 #include "llvm/IR/Instruction.h"
@@ -3178,16 +3177,11 @@ const MCExpr *AsmPrinter::lowerConstant(const Constant *CV) {
   if (const ConstantInt *CI = dyn_cast<ConstantInt>(CV))
     return MCConstantExpr::create(CI->getZExtValue(), Ctx);
 
-  if (const GlobalValue *GV = dyn_cast<GlobalValue>(CV)) {
-    if (auto *GVB = dyn_cast<GlobalVariable>(GV)) {
-      if (GVB->getSection() == "llvm.ptrauth") {
-        auto PAI = *GlobalPtrAuthInfo::analyze(GV);
-        return lowerPtrAuthGlobalConstant(PAI);
-      }
-    }
+  if (const ConstantPtrAuth *CPA = dyn_cast<ConstantPtrAuth>(CV))
+    return lowerConstantPtrAuth(*CPA);
 
+  if (const GlobalValue *GV = dyn_cast<GlobalValue>(CV))
     return MCSymbolRefExpr::create(getSymbol(GV), Ctx);
-  }
 
   if (const BlockAddress *BA = dyn_cast<BlockAddress>(CV))
     return MCSymbolRefExpr::create(GetBlockAddressSymbol(BA), Ctx);
