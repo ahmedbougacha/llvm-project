@@ -4174,7 +4174,10 @@ defm strict_return : BoolFOption<"strict-return",
   PosFlag<SetTrue>>;
 
 let Flags = [TargetSpecific] in {
-defm ptrauth_intrinsics : OptInCC1FFlag<"ptrauth-intrinsics", "Enable pointer authentication intrinsics">;
+defm ptrauth_intrinsics : OptInCC1FFlag<"ptrauth-intrinsics",
+  "Enable pointer authentication intrinsics">;
+defm ptrauth_returns : OptInCC1FFlag<"ptrauth-returns",
+  "Enable signing and authentication of return addresses">;
 }
 
 let Group = f_Group in {

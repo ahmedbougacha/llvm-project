@@ -18,6 +18,11 @@ namespace clang {
 
 constexpr unsigned PointerAuthKeyNone = -1;
 
+struct PointerAuthOptions {
+  /// Should return addresses be authenticated?
+  bool ReturnAddresses = false;
+};
+
 } // end namespace clang
 
 #endif
