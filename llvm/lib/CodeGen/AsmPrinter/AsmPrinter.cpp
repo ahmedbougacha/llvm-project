@@ -75,6 +75,7 @@
 #include "llvm/IR/GlobalAlias.h"
 #include "llvm/IR/GlobalIFunc.h"
 #include "llvm/IR/GlobalObject.h"
+#include "llvm/IR/GlobalPtrAuthInfo.h"
 #include "llvm/IR/GlobalValue.h"
 #include "llvm/IR/GlobalVariable.h"
 #include "llvm/IR/Instruction.h"
@@ -2885,6 +2886,10 @@ bool AsmPrinter::emitSpecialLLVMGlobal(const GlobalVariable *GV) {
       GV->hasAvailableExternallyLinkage())
     return true;
 
+  // Ignore ptrauth globals: they only represent references to other globals.
+  if (GV->getSection() == "llvm.ptrauth")
+    return true;
+
   if (GV->getName() == "llvm.arm64ec.symbolmap") {
     // For ARM64EC, print the table that maps between symbols and the
     // corresponding thunks to translate between x64 and AArch64 code.
@@ -3173,8 +3178,16 @@ const MCExpr *AsmPrinter::lowerConstant(const Constant *CV) {
   if (const ConstantInt *CI = dyn_cast<ConstantInt>(CV))
     return MCConstantExpr::create(CI->getZExtValue(), Ctx);
 
-  if (const GlobalValue *GV = dyn_cast<GlobalValue>(CV))
+  if (const GlobalValue *GV = dyn_cast<GlobalValue>(CV)) {
+    if (auto *GVB = dyn_cast<GlobalVariable>(GV)) {
+      if (GVB->getSection() == "llvm.ptrauth") {
+        auto PAI = *GlobalPtrAuthInfo::analyze(GV);
+        return lowerPtrAuthGlobalConstant(PAI);
+      }
+    }
+
     return MCSymbolRefExpr::create(getSymbol(GV), Ctx);
+  }
 
   if (const BlockAddress *BA = dyn_cast<BlockAddress>(CV))
     return MCSymbolRefExpr::create(GetBlockAddressSymbol(BA), Ctx);

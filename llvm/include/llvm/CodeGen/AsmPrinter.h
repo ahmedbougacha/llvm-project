@@ -76,6 +76,8 @@ class TargetLoweringObjectFile;
 class TargetMachine;
 class Twine;
 
+class GlobalPtrAuthInfo;
+
 namespace remarks {
 class RemarkStreamer;
 }
@@ -583,6 +585,12 @@ public:
   /// a C++ static/global constructor list are emitted.
   virtual void emitXXStructor(const DataLayout &DL, const Constant *CV) {
     emitGlobalConstant(DL, CV);
+  }
+
+  /// Lower the specified "llvm.ptrauth" GlobalVariable to an MCExpr.
+  virtual const MCExpr *
+  lowerPtrAuthGlobalConstant(const GlobalPtrAuthInfo &PAI) {
+    report_fatal_error("llvm.ptrauth global lowering not implemented");
   }
 
   /// Return true if the basic block has exactly one predecessor and the control
