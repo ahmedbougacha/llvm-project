@@ -44,6 +44,8 @@
 #include "llvm/CodeGen/TargetRegisterInfo.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/DebugInfoMetadata.h"
+#include "llvm/IR/DiagnosticInfo.h"
+#include "llvm/IR/DiagnosticPrinter.h"
 #include "llvm/MC/MCAsmInfo.h"
 #include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCInst.h"
@@ -101,6 +103,9 @@ public:
   }
 
   void authLRBeforeTailCall(const MachineFunction &MF, unsigned ScratchReg);
+
+  const MCExpr *
+  lowerConstantPtrAuth(const ConstantPtrAuth &CPA) override;
 
   void emitStartOfAsmFile(Module &M) override;
   void emitJumpTableInfo() override;
@@ -1852,6 +1857,62 @@ void AArch64AsmPrinter::emitPtrauthBranch(const MachineInstr *MI) {
   ++InstsEmitted;
 
   assert(STI->getInstrInfo()->getInstSizeInBytes(*MI) >= InstsEmitted * 4);
+}
+
+const MCExpr *
+AArch64AsmPrinter::lowerConstantPtrAuth(const ConstantPtrAuth &CPA) {
+  MCContext &Ctx = OutContext;
+
+  // Figure out the base symbol and the addend, if any.
+  APInt Offset(64, 0);
+  const Value *BaseGV =
+    CPA.getPointer()->stripAndAccumulateConstantOffsets(
+      getDataLayout(), Offset, /*AllowNonInbounds=*/true);
+
+  auto *BaseGVB = dyn_cast<GlobalValue>(BaseGV);
+
+  // If we can't understand the referenced ConstantExpr, there's nothing
+  // else we can do: emit an error.
+  if (!BaseGVB) {
+    std::string Buf;
+    raw_string_ostream OS(Buf);
+    OS << "Couldn't resolve target base/addend of ptrauth constant '"
+       << CPA << "'";
+    BaseGV->getContext().emitError(OS.str());
+
+    return 0;
+  }
+
+  // If there is an addend, turn that into the appropriate MCExpr.
+  const MCExpr *Sym = MCSymbolRefExpr::create(getSymbol(BaseGVB), Ctx);
+  if (Offset.sgt(0))
+    Sym = MCBinaryExpr::createAdd(
+        Sym, MCConstantExpr::create(Offset.getSExtValue(), Ctx), Ctx);
+  else if (Offset.slt(0))
+    Sym = MCBinaryExpr::createSub(
+        Sym, MCConstantExpr::create((-Offset).getSExtValue(), Ctx), Ctx);
+
+  uint64_t KeyID = CPA.getKey()->getZExtValue();
+  if (!isUInt<2>(KeyID)) {
+    std::string Buf;
+    raw_string_ostream OS(Buf);
+    OS << "Invalid AArch64 PAC Key ID '" << utostr(KeyID)
+      << "' in ptrauth constant '" << CPA << "'";
+    BaseGV->getContext().emitError(OS.str());
+  }
+
+  uint64_t Disc = CPA.getDiscriminator()->getZExtValue();
+  if (!isUInt<16>(Disc)) {
+    std::string Buf;
+    raw_string_ostream OS(Buf);
+    OS << "Invalid AArch64 Discriminator '" << utostr(Disc)
+       << "' in ptrauth constant '" << CPA << "'";
+    BaseGV->getContext().emitError(OS.str());
+  }
+
+  // Finally build the complete @AUTH expr.
+  return AArch64AuthMCExpr::create(Sym, Disc, AArch64PACKey::ID(KeyID),
+                                   CPA.hasAddressDiscriminator(), Ctx);
 }
 
 // Simple pseudo-instructions have their lowering (with expansion to real
