@@ -302,85 +302,30 @@ llvm::Value *CodeGenFunction::EmitPointerAuthResign(
   return value;
 }
 
-/// We use an abstract, side-allocated cache for signed function pointers
-/// because (1) most compiler invocations will not need this cache at all,
-/// since they don't use signed function pointers, and (2) the
-/// representation is pretty complicated (an llvm::ValueMap) and we don't
-/// want to have to include that information in CodeGenModule.h.
-template <class CacheTy>
-static CacheTy &getOrCreateCache(void *&abstractStorage) {
-  auto cache = static_cast<CacheTy*>(abstractStorage);
-  if (cache) return *cache;
-
-  abstractStorage = cache = new CacheTy();
-  return *cache;
-}
-
-template <class CacheTy>
-static void destroyCache(void *&abstractStorage) {
-  delete static_cast<CacheTy*>(abstractStorage);
-  abstractStorage = nullptr;
-}
-
-namespace {
-struct PointerAuthConstantEntry {
-  unsigned Key;
-  llvm::Constant *OtherDiscriminator;
-  llvm::GlobalVariable *Global;
-};
-
-using PointerAuthConstantEntries =
-  std::vector<PointerAuthConstantEntry>;
-using ByConstantCacheTy =
-  llvm::ValueMap<llvm::Constant*, PointerAuthConstantEntries>;
-using ByDeclCacheTy = llvm::DenseMap<const Decl *, llvm::Constant *>;
-using FunctionPointerCacheTy =
-    llvm::DenseMap<std::pair<GlobalDecl, QualType>, llvm::Constant *>;
-}
-
-/// Build a global signed-pointer constant.
-static llvm::GlobalVariable *
+/// Build a signed-pointer "ptrauth" constant.
+static llvm::ConstantPtrAuth *
 buildConstantAddress(CodeGenModule &CGM, llvm::Constant *pointer, unsigned key,
                      llvm::Constant *storageAddress,
                      llvm::Constant *otherDiscriminator) {
-  ConstantInitBuilder builder(CGM);
-  auto values = builder.beginStruct();
-  values.add(pointer);
-  values.addInt(CGM.Int32Ty, key);
+  llvm::Constant *addressDiscriminator = nullptr;
   if (storageAddress) {
-    if (isa<llvm::ConstantInt>(storageAddress)) {
-      assert(!storageAddress->isNullValue() &&
-             "expecting pointer or special address-discriminator indicator");
-      values.add(storageAddress);
-    } else {
-      values.add(llvm::ConstantExpr::getPtrToInt(storageAddress, CGM.IntPtrTy));
-    }
+    addressDiscriminator = storageAddress;
+    assert(storageAddress->getType() == CGM.UnqualPtrTy);
   } else {
-    values.addInt(CGM.SizeTy, 0);
+    addressDiscriminator = llvm::Constant::getNullValue(CGM.UnqualPtrTy);
   }
+
+  llvm::ConstantInt *integerDiscriminator = nullptr;
   if (otherDiscriminator) {
-    assert(otherDiscriminator->getType() == CGM.SizeTy);
-    values.add(otherDiscriminator);
+    assert(otherDiscriminator->getType() == CGM.Int64Ty);
+    integerDiscriminator = cast<llvm::ConstantInt>(otherDiscriminator);
   } else {
-    values.addInt(CGM.SizeTy, 0);
+    integerDiscriminator = llvm::ConstantInt::get(CGM.Int64Ty, 0);
   }
 
-  auto *stripped = pointer->stripPointerCasts();
-  StringRef name;
-  if (const auto *origGlobal = dyn_cast<llvm::GlobalValue>(stripped))
-    name = origGlobal->getName();
-  else if (const auto *ce = dyn_cast<llvm::ConstantExpr>(stripped))
-    if (ce->getOpcode() == llvm::Instruction::GetElementPtr)
-      name = cast<llvm::GEPOperator>(ce)->getPointerOperand()->getName();
-
-  auto global = values.finishAndCreateGlobal(
-      name + ".ptrauth",
-      CGM.getPointerAlign(),
-      /*constant*/ true,
-      llvm::GlobalVariable::PrivateLinkage);
-  global->setSection("llvm.ptrauth");
-
-  return global;
+  return llvm::ConstantPtrAuth::get(
+    pointer, llvm::ConstantInt::get(CGM.Int32Ty, key), addressDiscriminator,
+    integerDiscriminator);
 }
 
 llvm::Constant *
@@ -391,42 +336,9 @@ CodeGenModule::getConstantSignedPointer(llvm::Constant *pointer,
   // Unique based on the underlying value, not a signing of it.
   auto stripped = pointer->stripPointerCasts();
 
-  PointerAuthConstantEntries *entries = nullptr;
-
-  // We can cache this for discriminators that aren't defined in terms
-  // of globals.  Discriminators defined in terms of globals (1) would
-  // require additional tracking to be safe and (2) only come up with
-  // address-specific discrimination, where this entry is almost certainly
-  // unique to the use-site anyway.
-  if (!storageAddress &&
-      (!otherDiscriminator ||
-       isa<llvm::ConstantInt>(otherDiscriminator))) {
-
-    // Get or create the cache.
-    auto &cache =
-      getOrCreateCache<ByConstantCacheTy>(ConstantSignedPointersByConstant);
-
-    // Check for an existing entry.
-    entries = &cache[stripped];
-    for (auto &entry : *entries) {
-      if (entry.Key == key && entry.OtherDiscriminator == otherDiscriminator) {
-        auto global = entry.Global;
-        return llvm::ConstantExpr::getBitCast(global, pointer->getType());
-      }
-    }
-  }
-
   // Build the constant.
-  auto global = buildConstantAddress(*this, stripped, key, storageAddress,
-                                     otherDiscriminator);
-
-  // Cache if applicable.
-  if (entries) {
-    entries->push_back({ key, otherDiscriminator, global });
-  }
-
-  // Cast to the original type.
-  return llvm::ConstantExpr::getBitCast(global, pointer->getType());
+  return buildConstantAddress(*this, stripped, key, storageAddress,
+                              otherDiscriminator);
 }
 
 /// Does a given PointerAuthScheme require us to sign a value
@@ -500,11 +412,6 @@ void ConstantAggregateBuilderBase::addSignedPointer(
   add(signedPointer);
 }
 
-void CodeGenModule::destroyConstantSignedPointerCaches() {
-  destroyCache<ByConstantCacheTy>(ConstantSignedPointersByConstant);
-  destroyCache<FunctionPointerCacheTy>(SignedFunctionPointersByDeclAndType);
-}
-
 /// If applicable, sign a given constant function pointer with the ABI rules for
 /// functionType.
 llvm::Constant *CodeGenModule::getFunctionPointer(llvm::Constant *pointer,
@@ -515,32 +422,9 @@ llvm::Constant *CodeGenModule::getFunctionPointer(llvm::Constant *pointer,
          functionType->isFunctionPointerType());
 
   if (auto pointerAuth = getFunctionPointerAuthInfo(functionType)) {
-    // Check a cache that, for now, just has entries for functions signed
-    // with the standard function-pointer scheme.
-    // Cache function pointers based on their decl and type. Anything without a
-    // decl is going to be a one-off that doesn't need to be cached anyway. We
-    // need the type to handle redeclarations of unprototyped functions that add
-    // prototypes.
-    llvm::Constant **entry = nullptr;
-    if (GD.getAsOpaquePtr()) {
-      auto &cache = getOrCreateCache<FunctionPointerCacheTy>(
-          SignedFunctionPointersByDeclAndType);
-      entry = &cache[std::make_pair(GD.getCanonicalDecl(),
-                                    functionType.getCanonicalType())];
-      if (*entry)
-        return llvm::ConstantExpr::getBitCast(*entry, pointer->getType());
-    }
-
-    // If the cache misses, build a new constant.  It's not a *problem* to
-    // have more than one of these for a particular function, but it's nice
-    // to avoid it.
-    pointer = getConstantSignedPointer(
-        pointer, pointerAuth.getKey(), nullptr,
-        cast_or_null<llvm::Constant>(pointerAuth.getDiscriminator()));
-
-    // Store the result back into the cache, if any.
-    if (entry)
-      *entry = pointer;
+    return getConstantSignedPointer(
+      pointer, pointerAuth.getKey(), nullptr,
+      cast_or_null<llvm::Constant>(pointerAuth.getDiscriminator()));
   }
 
   return pointer;

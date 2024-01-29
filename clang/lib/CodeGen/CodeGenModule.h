@@ -445,10 +445,6 @@ private:
   /// Used for uniquing of annotation arguments.
   llvm::DenseMap<unsigned, llvm::Constant *> AnnotationArgs;
 
-  /// Signed constant pointers.
-  void *SignedFunctionPointersByDeclAndType = nullptr;
-  void *ConstantSignedPointersByConstant = nullptr;
-
   llvm::StringMap<llvm::GlobalVariable *> CFConstantStringMap;
 
   llvm::DenseMap<llvm::Constant *, llvm::GlobalVariable *> ConstantStringMap;
@@ -1817,8 +1813,6 @@ private:
   /// Check whether we can use a "simpler", more core exceptions personality
   /// function.
   void SimplifyPersonality();
-
-  void destroyConstantSignedPointerCaches();
 
   /// Helper function for getDefaultFunctionAttributes. Builds a set of function
   /// attributes which can be simply added to a function.

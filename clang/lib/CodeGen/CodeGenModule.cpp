@@ -450,9 +450,7 @@ CodeGenModule::CodeGenModule(ASTContext &C,
                               CodeGenOpts.NumRegisterParameters);
 }
 
-CodeGenModule::~CodeGenModule() {
-  destroyConstantSignedPointerCaches();
-}
+CodeGenModule::~CodeGenModule() {}
 
 void CodeGenModule::createObjCRuntime() {
   // This is just isGNUFamily(), but we want to force implementors of
