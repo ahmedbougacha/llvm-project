@@ -3,7 +3,7 @@
 extern void foo() __attribute__((weak_import));
 
 // CHECK-LABEL: define void @bar()
-// CHECK: br i1 icmp ne (ptr @foo.ptrauth, ptr null), label
+// CHECK: br i1 icmp ne (ptr ptrauth (ptr @foo, i32 0, ptr null, i64 0), ptr null), label
 void bar() {
   if (foo)
     foo();

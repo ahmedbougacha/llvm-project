@@ -17,7 +17,8 @@ VoidFn test_nop_cast_functype(void (*fptr)(int, int)) {
 }
 
 void *test_nop_cast_direct() {
+  // FIXME: this lost noundef/nonnull
   // CHECK: define noundef nonnull ptr @test_nop_cast_direct()
-  // CHECK: ret ptr @test_nop_cast_direct.ptrauth
+  // CHECK: ret ptr ptrauth (ptr @test_nop_cast_direct, i32 0, ptr null, i64 0)
   return ptrauth_nop_cast(void *, test_nop_cast_direct);
 }

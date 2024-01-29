@@ -14,31 +14,24 @@ unsigned long uintptr;
 // CHECK: @test_constant_null = global ptr null
 void (*test_constant_null)(int) = 0;
 
-// CHECK: @f.ptrauth = private constant { {{.*}} } { ptr @f, i32 0, i64 0, i64 2712 }
-// CHECK: @test_constant_cast = global ptr @f.ptrauth
+// CHECK: @test_constant_cast = global ptr ptrauth (ptr @f, i32 0, ptr null, i64 2712)
 void (*test_constant_cast)(int) = (void (*)(int))f;
 
-// CHECK: @f.ptrauth.1 = private constant { {{.*}} } { ptr @f, i32 0, i64 0, i64 0 }
-// CHECK: @test_opaque = global ptr @f.ptrauth.1
+// CHECK: @test_opaque = global ptr ptrauth (ptr @f, i32 0, ptr null, i64 0)
 void *test_opaque =
 #ifdef __cplusplus
     (void *)
 #endif
     (void (*)(int))(double (*)(double))f;
 
-// CHECK: @test_intptr_t = global i64 ptrtoint (ptr @f.ptrauth.1 to i64)
+// CHECK: @test_intptr_t = global i64 ptrtoint (ptr ptrauth (ptr @f, i32 0, ptr null, i64 0) to i64)
 unsigned long test_intptr_t = (unsigned long)f;
 
-// CHECK: @test_through_long = global ptr @f.ptrauth
+// CHECK: @test_through_long = global ptr ptrauth (ptr @f, i32 0, ptr null, i64 2712)
 void (*test_through_long)(int) = (void (*)(int))(long)f;
 
-// CHECK: @test_to_long = global i64 ptrtoint (ptr @f.ptrauth.1 to i64)
+// CHECK: @test_to_long = global i64 ptrtoint (ptr ptrauth (ptr @f, i32 0, ptr null, i64 0) to i64)
 long test_to_long = (long)(double (*)())f;
-
-// CHECKC: @knr.ptrauth = private constant { ptr, i32, i64, i64 } { ptr @knr, i32 0, i64 0, i64 18983 }, section "llvm.ptrauth"
-
-// CHECKC: @redecl.ptrauth = private constant { ptr, i32, i64, i64 } { ptr @redecl, i32 0, i64 0, i64 18983 }, section "llvm.ptrauth"
-// CHECKC: @redecl.ptrauth.3 = private constant { ptr, i32, i64, i64 } { ptr @redecl, i32 0, i64 0, i64 2712 }, section "llvm.ptrauth"
 
 #ifdef __cplusplus
 struct ptr_member {
@@ -56,7 +49,7 @@ void (*test_member)() = (void (*)())pm.fptr_;
 void test_cast_to_opaque() {
   opaque = (void *)f;
 
-  // CHECK: [[RESIGN_VAL:%.*]] = call i64 @llvm.ptrauth.resign(i64 ptrtoint (ptr @f.ptrauth.2 to i64), i32 0, i64 18983, i32 0, i64 0)
+  // CHECK: [[RESIGN_VAL:%.*]] = call i64 @llvm.ptrauth.resign(i64 ptrtoint (ptr ptrauth (ptr @f, i32 0, ptr null, i64 18983) to i64), i32 0, i64 18983, i32 0, i64 0)
   // CHECK: [[RESIGN_PTR:%.*]] = inttoptr i64 [[RESIGN_VAL]] to ptr
 }
 
@@ -109,7 +102,7 @@ void test_call_lvalue_cast() {
   (*(void (*)(int))f)(42);
 
   // CHECK: entry:
-  // CHECK-NEXT: [[RESIGN:%.*]] = call i64 @llvm.ptrauth.resign(i64 ptrtoint (ptr @f.ptrauth.2 to i64), i32 0, i64 18983, i32 0, i64 2712)
+  // CHECK-NEXT: [[RESIGN_VAL:%.*]] = call i64 @llvm.ptrauth.resign(i64 ptrtoint (ptr ptrauth (ptr @f, i32 0, ptr null, i64 18983) to i64), i32 0, i64 18983, i32 0, i64 2712)
   // CHECK-NEXT: [[RESIGN_INT:%.*]] = inttoptr i64 [[RESIGN]] to ptr
   // CHECK-NEXT: call void [[RESIGN_INT]](i32 noundef 42) [ "ptrauth"(i32 0, i64 2712) ]
 }
@@ -126,7 +119,7 @@ void test_knr() {
   p(0);
 
   // CHECKC: [[P:%.*]] = alloca ptr
-  // CHECKC: store ptr @knr.ptrauth, ptr [[P]]
+  // CHECKC: store ptr ptrauth (ptr @knr, i32 0, ptr null, i64 18983), ptr [[P]]
   // CHECKC: [[LOAD:%.*]] = load ptr, ptr [[P]]
   // CHECKC: call void [[LOAD]](i32 noundef 0) [ "ptrauth"(i32 0, i64 18983) ]
 
