@@ -31,7 +31,6 @@ void test4() {
   (*((fptr_t)(&*((char *)(&*(fptr_t)cptr)))))();
 
   // CHECK: [[LOAD:%.*]] = load ptr, ptr @cptr
-  // FIXME: this lost nonnull, so kept the null-check around the resign?
   // CHECK-NEXT: [[CAST4:%.*]] = ptrtoint ptr [[LOAD]] to i64
   // CHECK-NEXT: [[RESIGN:%.*]] = call i64 @llvm.ptrauth.resign(i64 [[CAST4]], i32 0, i64 0, i32 0, i64 18983)
   // CHECK-NEXT: [[CAST5:%.*]] = inttoptr i64 [[RESIGN]] to ptr

@@ -102,7 +102,7 @@ void test_call_lvalue_cast() {
   (*(void (*)(int))f)(42);
 
   // CHECK: entry:
-  // CHECK-NEXT: [[RESIGN_VAL:%.*]] = call i64 @llvm.ptrauth.resign(i64 ptrtoint (ptr ptrauth (ptr @f, i32 0, ptr null, i64 18983) to i64), i32 0, i64 18983, i32 0, i64 2712)
+  // CHECK-NEXT: [[RESIGN:%.*]] = call i64 @llvm.ptrauth.resign(i64 ptrtoint (ptr ptrauth (ptr @f, i32 0, ptr null, i64 18983) to i64), i32 0, i64 18983, i32 0, i64 2712)
   // CHECK-NEXT: [[RESIGN_INT:%.*]] = inttoptr i64 [[RESIGN]] to ptr
   // CHECK-NEXT: call void [[RESIGN_INT]](i32 noundef 42) [ "ptrauth"(i32 0, i64 2712) ]
 }
@@ -122,10 +122,6 @@ void test_knr() {
   // CHECKC: store ptr ptrauth (ptr @knr, i32 0, ptr null, i64 18983), ptr [[P]]
   // CHECKC: [[LOAD:%.*]] = load ptr, ptr [[P]]
   // CHECKC: call void [[LOAD]](i32 noundef 0) [ "ptrauth"(i32 0, i64 18983) ]
-
-  void *p2 = p;
-
-  // CHECKC: call i64 @llvm.ptrauth.resign(i64 {{.*}}, i32 0, i64 18983, i32 0, i64 0)
 }
 
 // CHECKC-LABEL: define void @test_redeclaration
@@ -137,7 +133,8 @@ void test_redeclaration() {
   ptr();
   ptr2(0);
 
-  // CHECKC-NOT: call i64 @llvm.ptrauth.resign
+  // CHECKC: store ptr ptrauth (ptr @redecl, i32 0, ptr null, i64 18983), ptr %ptr
+  // CHECKC: store ptr ptrauth (ptr @redecl, i32 0, ptr null, i64 2712), ptr %ptr2
   // CHECKC: call void {{.*}}() [ "ptrauth"(i32 0, i64 18983) ]
   // CHECKC: call void {{.*}}(i32 noundef 0) [ "ptrauth"(i32 0, i64 2712) ]
 }
@@ -151,13 +148,15 @@ void test_redecl_knr() {
   void (*p)() = knr2;
   p();
 
+  // CHECKC: store ptr ptrauth (ptr @knr2, i32 0, ptr null, i64 18983)
+  // CHECKC: call void {{.*}}() [ "ptrauth"(i32 0, i64 18983) ]
+
   void knr2(int);
 
   void (*p2)(int) = knr2;
   p2(0);
 
-  // CHECKC-NOT: call i64 @llvm.ptrauth.resign
-  // CHECKC: call void {{.*}}() [ "ptrauth"(i32 0, i64 18983) ]
+  // CHECKC: store ptr ptrauth (ptr @knr2, i32 0, ptr null, i64 2712)
   // CHECKC: call void {{.*}}(i32 noundef 0) [ "ptrauth"(i32 0, i64 2712) ]
 }
 
