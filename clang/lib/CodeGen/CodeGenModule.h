@@ -443,6 +443,9 @@ private:
   /// Used for uniquing of annotation arguments.
   llvm::DenseMap<unsigned, llvm::Constant *> AnnotationArgs;
 
+  /// Signed constant pointers.
+  void *ConstantSignedPointersByConstant = nullptr;
+
   llvm::StringMap<llvm::GlobalVariable *> CFConstantStringMap;
 
   llvm::DenseMap<llvm::Constant *, llvm::GlobalVariable *> ConstantStringMap;
@@ -937,6 +940,11 @@ public:
 
   // Return the function body address of the given function.
   llvm::Constant *GetFunctionStart(const ValueDecl *Decl);
+
+  llvm::Constant *getConstantSignedPointer(llvm::Constant *pointer,
+                                           unsigned key,
+                                           llvm::Constant *storageAddress,
+                                           llvm::Constant *extraDiscrim);
 
   // Return whether RTTI information should be emitted for this target.
   bool shouldEmitRTTI(bool ForEH = false) {
@@ -1758,6 +1766,8 @@ private:
   /// Check whether we can use a "simpler", more core exceptions personality
   /// function.
   void SimplifyPersonality();
+
+  void destroyConstantSignedPointerCaches();
 
   /// Helper function for getDefaultFunctionAttributes. Builds a set of function
   /// attributes which can be simply added to a function.
