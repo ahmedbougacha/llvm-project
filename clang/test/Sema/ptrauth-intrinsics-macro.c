@@ -32,3 +32,7 @@ void test(int *dp, int value) {
   int t2 = ptrauth_sign_generic_data(dp, 0);
   (void)t2;
 }
+
+void test_sign_constant(int *dp) {
+  dp = ptrauth_sign_constant(&dv, VALID_DATA_KEY, 0);
+}
