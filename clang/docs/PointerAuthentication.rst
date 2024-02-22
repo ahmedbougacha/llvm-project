@@ -52,9 +52,8 @@ This document serves four purposes:
   ways in which programmers can strengthen its protections (including
   recommendations for language implementors).
 
-- It will eventually document the language ABIs currently used for C, C++,
-  Objective-C, and Swift on arm64e, although these are not yet stable on any
-  target.
+- It documents the language ABIs currently used for C, C++, Objective-C, and
+  Swift on arm64e, although these are not yet stable on any target.
 
 Basic Concepts
 --------------
@@ -234,6 +233,31 @@ not significantly weaken the mitigation, since collisions remain uncommon.
 The algorithm for blending a constant discriminator with a storage address is
 implementation-defined.
 
+.. _Authentication Options:
+
+Authentication Options
+~~~~~~~~~~~~~~~~~~~~~~
+
+It is possible to tweak the behaviour of pointer authentication using the
+`options` argument to the ``__ptrauth`` attribute. These options are specified
+through a string literal containing a comma-separated list of options. Current
+options are
+
+- authentication mode: ``strip``, ``sign-and-strip``, ``sign-and-auth``. These
+  control whether authentication codes are ignored completely (``strip``),
+  whether values are signed but not authenticated (``sign-and-strip``), or the
+  default of full authentication (``sign-and-auth``).
+
+- ``authenticates-null-values``: Enables full signing and authentication of
+  null values. The default behaviour of pointer authentication is to not sign
+  or authenticate null values. This option ensures that all values, including
+  null values, will always be signed and authenticated.
+
+- ``isa-pointer``: This is used to indicate that the target value is an
+  Objective-C isa pointer, and needs to mask out objective-c tag bits prior to
+  signing or authenticating the value.
+
+
 .. _Signing schemas:
 
 Signing Schemas
@@ -263,11 +287,120 @@ inspecting information stored along with the pointer.  See the section on
 Language Features
 -----------------
 
-There is currently one main pointer authentication language feature:
+There are three levels of the pointer authentication language feature:
 
-- The language provides the ``<ptrauth.h>`` intrinsic interface for manually
-  signing and authenticating pointers in code.  These can be used in
+- The language implementation automatically signs and authenticates function
+  pointers (and certain data pointers) across a variety of standard situations,
+  including return addresses, function pointers, and C++ virtual functions. The
+  intent is for all pointers to code in program memory to be signed in some way
+  and for all branches to code in program text to authenticate those
+  signatures.
+
+- The language also provides extensions to override the default rules used by
+  the language implementation.  For example, the ``__ptrauth`` type qualifier
+  can be used to change how pointers are signed when they are stored in
+  a particular variable or field; this provides much stronger protection than
+  is guaranteed by the default rules for C function and data pointers.
+
+- Finally, the language provides the ``<ptrauth.h>`` intrinsic interface for
+  manually signing and authenticating pointers in code.  These can be used in
   circumstances where very specific behavior is required.
+
+Language Implementation
+~~~~~~~~~~~~~~~~~~~~~~~
+
+For the most part, pointer authentication is an unobserved detail of the
+implementation of the programming language.  Any element of the language
+implementation that would perform an indirect branch to a pointer is implicitly
+altered so that the pointer is signed when first constructed and authenticated
+when the branch is performed.  This includes:
+
+- indirect-call features in the programming language, such as C function
+  pointers, C++ virtual functions, C++ member function pointers, the "blocks"
+  C extension, and so on;
+
+- returning from a function, no matter how it is called; and
+
+- indirect calls introduced by the implementation, such as branches through the
+  global offset table (GOT) used to implement direct calls to functions defined
+  outside of the current shared object.
+
+For more information about this, see the `Language ABI`_ section.
+
+However, some aspects of the implementation are observable by the programmer or
+otherwise require special notice.
+
+C Data Pointers
+^^^^^^^^^^^^^^^
+
+The current implementation in Clang does not sign pointers to ordinary data by
+default. For a partial explanation of the reasoning behind this, see the
+`Theory of Operation`_ section.
+
+A specific data pointer which is more security-sensitive than most can be
+signed using the `__ptrauth qualifier`_ or using the ``<ptrauth.h>``
+intrinsics.
+
+C Function Pointers
+^^^^^^^^^^^^^^^^^^^
+
+The C standard imposes restrictions on the representation and semantics of
+function pointer types which make it difficult to achieve satisfactory
+signature diversity in the default language rules.  See `Attacks on pointer
+authentication`_ for more information about signature diversity.  Programmers
+should strongly consider using the ``__ptrauth`` qualifier to improve the
+protections for important function pointers, such as the components of of
+a hand-rolled "v-table"; see the section on the `__ptrauth qualifier`_ for
+details.
+
+The value of a pointer to a C function includes a signature, even when the
+value is cast to a non-function-pointer type like ``void*`` or ``intptr_t``. On
+implementations that use high bits to store the signature, this means that
+relational comparisons and hashes will vary according to the exact signature
+value, which is likely to change between executions of a program.  In some
+implementations, it may also vary based on the exact function pointer type.
+
+Null Pointers
+^^^^^^^^^^^^^
+
+In principle, an implementation could derive the signed null pointer value
+simply by applying the standard signing algorithm to the raw null pointer
+value. However, for likely signing algorithms, this would mean that the signed
+null pointer value would no longer be statically known, which would have many
+negative consequences.  For one, it would become substantially more expensive
+to emit null pointer values or to perform null-pointer checks.  For another,
+the pervasive (even if technically unportable) assumption that null pointers
+are bitwise zero would be invalidated, making it substantially more difficult
+to adopt pointer authentication, as well as weakening common optimizations for
+zero-initialized memory such as the use of ``.bzz`` sections.  Therefore it is
+beneficial to treat null pointers specially by giving them their usual
+representation.  On AArch64, this requires additional code when working with
+possibly-null pointers, such as when copying a pointer field that has been
+signed with address diversity.
+
+Return Addresses and Frame Pointers
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The current implementation in Clang implicitly signs both return addresses and
+frame pointers.  While these values are technically implementation details of
+a function, there are some important libraries and development tools which rely
+on manually walking the chain of stack frames.  These tools must be updated to
+correctly account for pointer authentication, either by stripping signatures
+(if security is not important for the tool, e.g. if it is capturing a stack
+trace during a crash) or properly authenticating them.  More information about
+how these values are signed is available in the `Language ABI`_ section.
+
+C++ Virtual Functions
+^^^^^^^^^^^^^^^^^^^^^
+
+The current implementation in Clang signs virtual function pointers with
+a discriminator derived from the full signature of the overridden method,
+including the method name and parameter types.  It is possible to write C++
+code that relies on v-table layout remaining constant despite changes to
+a method signature; for example, a parameter might be a ``typedef`` that
+resolves to a different type based on a build setting.  Such code violates
+C++'s One Definition Rule (ODR), but that violation is not normally detected;
+however, pointer authentication will detect it.
 
 
 Language Extensions
@@ -282,6 +415,136 @@ a number of different tests.
 - ``__has_feature(ptrauth_intrinsics)`` is true if ``<ptrauth.h>`` provides its
   normal interface.  This may be true even on targets where pointer
   authentication is not enabled by default.
+
+- ``__has_feature(ptrauth_returns)`` is true if the target uses pointer
+  authentication to protect return addresses.
+
+- ``__has_feature(ptrauth_calls)`` is true if the target uses pointer
+  authentication to protect indirect branches.  This implies
+  ``__has_feature(ptrauth_returns)`` and ``__has_feature(ptrauth_intrinsics)``.
+
+Clang provides several other tests only for historical purposes; for current
+purposes they are all equivalent to ``ptrauth_calls``.
+
+__ptrauth Qualifier
+^^^^^^^^^^^^^^^^^^^
+
+``__ptrauth(key, address, discriminator [, options] )`` is an extended type
+qualifier which causes so-qualified objects to hold pointers signed using the
+specified schema rather than the default schema for such types.
+
+In the current implementation in Clang, the qualified type must be a C pointer
+type, either to a function or to an object.  It currently cannot be an
+Objective-C pointer type, a C++ reference type, or a block pointer type; these
+restrictions may be lifted in the future.
+
+The current implementation in Clang is known to not provide adequate safety
+guarantees against the creation of `signing oracles`_ when assigning data
+pointers to ``__ptrauth``-qualified gl-values.  See the section on `safe
+derivation`_ for more information.
+
+The qualifier's operands are as follows:
+
+- ``key`` - an expression evaluating to a key value from ``<ptrauth.h>``; must
+  be a constant expression
+
+- ``address`` - whether to use address diversity (1) or not (0); must be
+  a constant expression with one of these two values
+
+- ``discriminator`` - a constant discriminator; must be a constant expression
+
+- ``options`` - an optional list of authentication behaviour options; must be
+  a string literal
+
+See `Discriminators`_ for more information about discriminators.
+
+See :ref:`authentication options<Authentication options>` for more information
+about options.
+
+Currently the operands must be constant-evaluable even within templates. In the
+future this restriction may be lifted to allow value-dependent expressions as
+long as they instantiate to a constant expression.
+
+Consistent with the ordinary C/C++ rule for parameters, top-level ``__ptrauth``
+qualifiers on a parameter (after parameter type adjustment) are ignored when
+deriving the type of the function.  The parameter will be passed using the
+default ABI for the unqualified pointer type.
+
+If ``x`` is an object of type ``__ptrauth(key, address, discriminator) T``,
+then the signing schema of the value stored in ``x`` is a key of ``key`` and
+a discriminator determined as follows:
+
+- if ``address`` is 0, then the discriminator is ``discriminator``;
+
+- if ``address`` is 1 and ``discriminator`` is 0, then the discriminator is
+  ``&x``; otherwise
+
+- if ``address`` is 1 and ``discriminator`` is non-zero, then the discriminator
+  is ``ptrauth_blend_discriminator(&x, discriminator)``; see
+  `ptrauth_blend_discriminator`_.
+
+__ptrauth_restricted_intptr Qualifier
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+This is a variant of the ``__ptrauth`` qualifier, that applies to pointer sized
+integers.  See the documentation for ``__ptrauth qualifier``.
+
+This feature exists to support older APIs that use [u]intptrs to hold opaque
+pointer types.
+
+Care must be taken to avoid using the signature bit components of the signed
+integers or subsequent authentication of the signed value may fail.
+
+Note: When applied to a global initialiser a signed uintptr can only be
+initialised with the value 0 or a global address.
+
+Non-triviality From Address Diversity
++++++++++++++++++++++++++++++++++++++
+
+Address diversity must impose additional restrictions in order to allow the
+implementation to correctly copy values.  In C++, a type qualified with address
+diversity is treated like a class type with non-trivial copy/move constructors
+and assignment operators, with the usual effect on containing classes and
+unions.  C does not have a standard concept of non-triviality, and so we must
+describe the basic rules here, with the intention of imitating the emergent
+rules of C++:
+
+- A type may be **non-trivial to copy**.
+
+- A type may also be **illegal to copy**.  Types that are illegal to copy are
+  always non-trivial to copy.
+
+- A type may also be **address-sensitive**.
+
+- A type qualified with a ``ptrauth`` qualifier that requires address diversity
+  is non-trivial to copy and address-sensitive.
+
+- An array type is illegal to copy, non-trivial to copy, or address-sensitive
+  if its element type is illegal to copy, non-trivial to copy, or
+  address-sensitive, respectively.
+
+- A struct type is illegal to copy, non-trivial to copy, or address-sensitive
+  if it has a field whose type is illegal to copy, non-trivial to copy, or
+  address-sensitive, respectively.
+
+- A union type is both illegal and non-trivial to copy if it has a field whose
+  type is non-trivial or illegal to copy.
+
+- A union type is address-sensitive if it has a field whose type is
+  address-sensitive.
+
+- A program is ill-formed if it uses a type that is illegal to copy as
+  a function parameter, argument, or return type.
+
+- A program is ill-formed if an expression requires a type to be copied that is
+  illegal to copy.
+
+- Otherwise, copying a type that is non-trivial to copy correctly copies its
+  subobjects.
+
+- Types that are address-sensitive must always be passed and returned
+  indirectly. Thus, changing the address-sensitivity of a type may be
+  ABI-breaking even if its size and alignment do not change.
 
 ``<ptrauth.h>``
 ~~~~~~~~~~~~~~~
@@ -331,6 +594,21 @@ be done in a single instruction with an immediate integer.
 ``pointer`` must have pointer type, and ``integer`` must have integer type. The
 result has type ``ptrauth_extra_data_t``.
 
+``ptrauth_string_discriminator``
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. code-block:: c
+
+  ptrauth_string_discriminator(string)
+
+Produce a discriminator value for the given string.  ``string`` must be
+a string literal of ``char`` character type.  The result has type
+``ptrauth_extra_data_t``.
+
+The result is always a constant expression.  The result value is never zero and
+always within range for both the ``__ptrauth`` qualifier and
+``ptrauth_blend_discriminator``.
+
 ``ptrauth_strip``
 ^^^^^^^^^^^^^^^^^
 
@@ -341,6 +619,23 @@ result has type ``ptrauth_extra_data_t``.
 Given that ``signedPointer`` matches the layout for signed pointers signed with
 the given key, extract the raw pointer from it.  This operation does not trap
 and cannot fail, even if the pointer is not validly signed.
+
+``ptrauth_sign_constant``
+^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. code-block:: c
+
+  ptrauth_sign_constant(pointer, key, discriminator)
+
+Return a signed pointer for a constant address in a manner which guarantees
+a non-attackable sequence.
+
+``pointer`` must be a constant expression of pointer type which evaluates to
+a non-null pointer.  The result will have the same type as ``discriminator``.
+
+Calls to this are constant expressions if the discriminator is a null-pointer
+constant expression or an integer constant expression. Implementations may make
+allow other pointer expressions as well.
 
 ``ptrauth_sign_unauthenticated``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -376,6 +671,27 @@ However, if the discriminator values are not constant integers, their
 computations may still be attackable.  In the future, Clang should be enhanced
 to guaranteed non-attackability if these expressions are
 :ref:`safely-derived<Safe derivation>`.
+
+``ptrauth_auth_function``
+^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. code-block:: c
+
+  ptrauth_auth_function(pointer, key, discriminator)
+
+Authenticate that ``pointer`` is signed with ``key`` and ``discriminator`` and
+re-sign it to the standard schema for a function pointer of its type.
+
+``pointer`` must have function pointer type.  The result will have the same
+type as ``pointer``.  This operation is not required to have the same behavior
+on a null pointer that the language implementation would.
+
+This operation makes the same attackability guarantees as
+``ptrauth_auth_and_resign``.
+
+If this operation appears syntactically as the function operand of a call,
+Clang guarantees that the call will directly authenticate the function value
+using the given schema rather than re-signing to the standard schema.
 
 ``ptrauth_auth_data``
 ^^^^^^^^^^^^^^^^^^^^^
@@ -420,6 +736,18 @@ The result will have type ``ptrauth_generic_signature_t``, which is an integer
 type.  Implementations are not required to make all bits of the result equally
 significant; in particular, some implementations are known to not leave
 meaningful data in the low bits.
+
+Standard ``__ptrauth`` Qualifiers
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+``<ptrauth.h>`` additionally provides several macros which expand to
+``__ptrauth`` qualifiers for common ABI situations.
+
+For convenience, these macros expand to nothing when pointer authentication is
+disabled.
+
+These macros can be found in the header; some details of these macros may be
+unstable or implementation-specific.
 
 
 
@@ -862,7 +1190,7 @@ pointer authentication.
   use of :ref:`relative addresses` in global data becomes insecure.
 
 - If an attacker can remap read-only program sections to be writable, then it
-  is unsafe to use unsigned pointers in global offset tables.
+  is unsafe to use unsigned pointers in `global offset tables`_.
 
 Remapping memory in this way often requires the attacker to have already
 substantively subverted the control flow of the process.  Nonetheless, if the
@@ -934,6 +1262,319 @@ support in LLVM IR.
 
 Furthermore, Clang should implement a warning when assigning a data pointer
 that is not safely derived to a ``__ptrauth``-qualified gl-value.
+
+
+
+
+Language ABI
+------------
+
+This section describes the pointer-authentication ABI currently implemented in
+Clang for the Apple arm64e target.  As other targets adopt pointer
+authentication, this section should be generalized to express their ABIs as
+well.
+
+Key Assignments
+~~~~~~~~~~~~~~~
+
+Armv8.3 provides four abstract signing keys: ``IA``, ``IB``, ``DA``, and
+``DB``. The architecture designates ``IA`` and ``IB`` for signing code pointers
+and ``DA`` and ``DB`` for signing data pointers; this is reinforced by two
+properties:
+
+- The ISA provides instructions that perform combined auth+call and auth+load
+  operations; these instructions can only use the ``I`` keys and ``D`` keys,
+  respectively.
+
+- AArch64's TBI feature can be separately enabled for code pointers
+  (controlling whether indirect-branch instructions ignore those bits) and data
+  pointers (controlling whether memory-access instructions) ignore those bits.
+  If TBI is enabled for a kind of pointer, the sign and auth operations
+  preserve the TBI bits when signing with an associated keys (at the cost of
+  shrinking the number of available signing bits by 8).
+
+arm64e then further subdivides the keys as follows:
+
+- The ``A`` keys are used for primarily "global" purposes like signing v-tables
+  and function pointers.  These keys are sometimes called *process-independent*
+  or *cross-process* because on existing OSes they are not changed when
+  changing processes, although this is not a platform guarantee.
+
+- The ``B`` keys are used for primarily "local" purposes like signing return
+  addresses and frame pointers.  These keys are sometimes called
+  *process-specific* because they are typically different between processes.
+  However, they are in fact shared across processes in one situation: systems
+  which provide ``fork`` cannot change these keys in the child process; they
+  can only be changed during ``exec``.
+
+Implementation-defined Algorithms and Quantities
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The cryptographic hash algorithm used to compute signatures in Armv8.3 is
+a private detail of the hardware implementation.
+
+arm64e restricts constant discriminators (used in ``__ptrauth`` and
+``ptrauth_blend_discriminator``) to the range from 0 to 65535, inclusive.
+A 0 discriminator generally signifies that no blending is required; see the
+documentation for ``ptrauth_blend_discriminator``.  This range is somewhat
+narrow but has two advantages:
+
+- The AArch64 ISA allows an arbitrary 16-bit immediate to be written over the
+  top 16 bits of a register in a single instruction:
+
+  .. code-block:: asm
+
+    movk xN, #0x4849, LSL 48
+
+  This is ideal for the discriminator blending operation because it adds
+  minimal code-size overhead and avoids overwriting any interesting bits from
+  the pointer.  Blending in a wider constant discriminator would either clobber
+  interesting bits (e.g. if it was loaded with ``movk xN, #0x4c4f, LSL 32``) or
+  require significantly more code (e.g. if the discriminator was loaded with
+  a ``mov+bfi`` sequence).
+
+- It is possible to pack a 16-bit discriminator into loader metadata with
+  minimal compromises, whereas a wider discriminator would require extra
+  metadata storage and therefore significantly impact load times.
+
+The string hash used by ``ptrauth_string_discriminator`` is a 64-bit
+SipHash-2-4 using the constant seed ``b5d4c9eb79104a796fec8b1b428781d4``
+(big-endian), with the result reduced by modulo to the range of non-zero
+discriminators (i.e. ``(rawHash % 65535) + 1``).
+
+Return Addresses
+~~~~~~~~~~~~~~~~
+
+The kernel must ensure that attackers cannot replace LR due to an asynchronous
+exception; see `Register clobbering`_.  If this is done by generally protecting
+LR, then functions which don't spill LR to the stack can avoid signing it
+entirely.  Otherwise, the return address must be signed; on arm64e it is signed
+with the ``IB`` key using the stack pointer on entry as the discriminator.
+
+Protecting return addresses is of such particular importance that the ``IB``
+key is almost entirely reserved for this purpose.
+
+Global Offset Tables
+~~~~~~~~~~~~~~~~~~~~
+
+The global offset table (GOT) is not ABI, but it is a common implementation
+technique for dynamic linking which deserves special discussion here.
+
+Whenever possible, signed pointers should be materialized directly in code
+rather than via the GOT, e.g. using an ``adrp+add+pac`` sequence on Armv8.3.
+This decreases the amount of work necessary at load time to initialize the GOT,
+but more importantly, it defines away the potential for several attacks:
+
+- Attackers cannot change instructions, so there is no way to cause this code
+  sequence to materialize a different pointer, whereas an access via the GOT
+  always has *at minimum* a probabilistic chance to be the target of successful
+  `substitution attacks`_.
+
+- The GOT is a dense pool of fixed pointers at a fixed offset relative to code;
+  attackers can search this pool for useful pointers that can be used in
+  `substitution attacks`_, whereas pointers that are only materialized directly
+  are not so easily available.
+
+- Similarly, attackers can use `access path attacks`_ to replace a pointer to
+  a signed pointer with a pointer to the GOT if the signing schema used within
+  the GOT happens to be the same as the original pointer.  This kind of
+  collision becomes much less likely to be useful the fewer pointers are in the
+  GOT in the first place.
+
+If this can be done for a symbol, then the compiler need only ensure that it
+materializes the signed pointer using registers that are safe against `register
+clobbering`_.
+
+However, many symbols can only be accessed via the GOT, e.g. because they
+resolve to definitions outside of the current image.  In this case, care must
+be taken to ensure that using the GOT does not introduce weaknesses.
+
+- If the entire GOT can be mapped read-only after loading, then no signing is
+  required within the GOT.  In fact, not signing pointers in the GOT is
+  preferable in this case because it makes the GOT useless for the harvesting
+  and access-path attacks above.  Storing raw pointers in this way is usually
+  extremely unsafe, but for the special case of an immutable GOT entry it's
+  fine because the GOT is always accessed via an address that is directly
+  materialized in code and thus provably unattackable.  (But see `Remapping`_.)
+
+- Otherwise, GOT entries which are used for producing a signed pointer constant
+  must be signed.  The signing schema used in the GOT need not match the target
+  signing schema for the signed constant.  To counteract the threats of
+  substitution attacks, it's best if GOT entries can be signed with address
+  diversity.  Using a good constant discriminator as well (perhaps derived from
+  the symbol name) can make it less useful to use a pointer to the GOT as the
+  replacement in an :ref:`access path attack<Access path attacks>`.
+
+In either case, the compiler must ensure that materializing the address of
+a GOT entry as part of producing a signed pointer constant is not vulnerable to
+`register clobbering`_.  If the linker also generates code for this, e.g. for
+call stubs, this generated code must take the same precautions.
+
+C Function Pointers
+~~~~~~~~~~~~~~~~~~~
+
+On arm64e, C function pointers are currently signed with the ``IA`` key without
+address diversity and with a constant discriminator of 0.
+
+The C and C++ standards do not permit C function pointers to be signed with
+address diversity by default: in C++ terms, function pointer types are required
+to be trivially copyable, which means they must be copyable with ``memcpy``.
+
+The use of a uniform constant discriminator is seen as a serious defect which
+should be remedied, and improving this is under investigation.
+
+C++ Virtual Tables
+~~~~~~~~~~~~~~~~~~
+
+The pointer to a C++ virtual table is currently signed with the ``DA`` key, no
+address diversity, and a constant discriminator of 0.  The use of no address
+diversity, as well as the uniform constant discriminator, are seen as
+weaknesses.  Not using address diversity allows attackers to simply copy valid
+v-table pointers from one object to another.  However, using a uniform
+discriminator of 0 does have positive performance and code-size implications on
+Armv8.3, and diversity for the most important v-table access pattern (virtual
+dispatch) is already better assured by the signing schemas used on the virtual
+functions.  It is also known that some code in practice copies objects
+containing v-tables with ``memcpy``, and while this is not permitted formally,
+it is something that may be invasive to eliminate.
+
+Virtual functions in a C++ virtual table are signed with the ``IA`` key,
+address diversity, and a constant discriminator equal to the string hash (see
+`ptrauth_string_discriminator`_) of the mangled name of the function which
+originally gave rise to the v-table slot.
+
+C++ Member Function Pointers
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+A member function pointer is signed with the ``IA`` key, no address diversity,
+and a constant discriminator equal to the string hash (see
+`ptrauth_string_discriminator`_) of the member pointer type.  Address diversity
+is not permitted by C++ for member function pointers because they must be
+trivially-copyable types.
+
+The Itanium C++ ABI specifies that member function pointers to virtual
+functions simply store an offset to the correct v-table slot.  This ABI cannot
+be used securely with pointer authentication because there is no safe place to
+store the constant discriminator for the target v-table slot: if it's stored
+with the offset, an attacker can simply overwrite it with the right
+discriminator for the offset.  Even if the programmer never uses pointers to
+virtual functions, the existence of this code path makes all member function
+pointer dereferences insecure.
+
+arm64e changes this ABI so that virtual function pointers are stored using
+dispatch thunks with vague linkage.  Because arm64e supports interoperation
+with ``arm64`` code when pointer authentication is disabled, an arm64e member
+function pointer dereference still recognizes the virtual-function
+representation but uses an bogus discriminator on that path that should always
+trap if pointer authentication is enabled dynamically.
+
+The use of dispatch thunks means that ``==`` on member function pointers is no
+longer reliable for virtual functions, but this is acceptable because the
+standard makes no guarantees about it in the first place.
+
+The use of dispatch thunks also potentially enables v-tables to be signed using
+a declaration-specific constant discriminator in the future; otherwise this
+discriminator would also need to be stored in the member pointer.
+
+Blocks
+~~~~~~
+
+Block pointers are data pointers which must interoperate with the ObjC `id`
+type and therefore cannot be signed themselves.
+
+The invocation pointer in a block is signed with the ``IA`` key using address
+diversity and a constant dicriminator of 0.  Using a uniform discriminator is
+seen as a weakness to be potentially improved, but this is tricky due to the
+subtype polymorphism directly permitted for blocks.
+
+Block descriptors and ``__block`` variables can contain pointers to functions
+that can be used to copy or destroy the object.  These functions are signed
+with the ``IA`` key, address diversity, and a constant discriminator of 0.  The
+structure of block descriptors is under consideration for improvement.
+
+Objective-C Methods
+~~~~~~~~~~~~~~~~~~~
+
+Objective-C method lists sign methods with the ``IA`` key using address
+diversity and a constant discriminator of 0.  Using a uniform constant
+discriminator is believed to be acceptable because these tables are only
+accessed internally to the Objective-C runtime.
+
+The Objective-C runtime provides additional protection to methods that have
+been loaded into the Objective-C method cache; this protection is private to
+the runtime.
+
+Swift Class Methods
+~~~~~~~~~~~~~~~~~~~
+
+Class methods in Swift are signed in the class object with the ``IA`` key using
+address diversity and a constant discriminator equal to the string hash (see
+`ptrauth_string_discriminator`_) of the mangling of the original overridable
+method.
+
+Resilient class-method lookup relies on passing a method descriptor; this
+method descriptor should be signed but currently isn't.  The lookup function
+returns a function pointer that is signed using ``IA`` without address
+diversity and with the correct constant discriminator for the looked-up method.
+
+Swift Heap Destructors
+~~~~~~~~~~~~~~~~~~~~~~
+
+Objects that are retained and released with Swift's native reference-counting
+system, including both native classes and temporary "box" allocations, must
+provide a destructor function in their metadata.  This destructor function is
+signed with the ``IA`` key using address diversity and a constant discriminator
+of ``0xbbbf``.
+
+Swift Protocol Requirements
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Protocol function requirements are signed in the protocol witness table with
+the ``IA`` key using address diversity and a constant discriminator equal to
+the string hash (see `ptrauth_string_discriminator`_) of the mangling of the
+protocol requirement.
+
+Swift Function Types
+~~~~~~~~~~~~~~~~~~~~
+
+The invocation pointers of Swift function values are signed using the ``IA``
+key without address diversity and with a constant discriminator derived loosely
+from the function type.
+
+Address diversity cannot be used by default for function values because
+function types are intended to be a "loadable" type which can be held and
+passed in registers.
+
+The constant discriminator currently accounts for potential abstraction in the
+function signature in ways that decrease the diversity of signatures; improving
+this is under investigation.
+
+Swift Metadata
+~~~~~~~~~~~~~~
+
+Type metadata pointers in Swift are not signed.
+
+Type context descriptors must be signed because they frequently contain
+`relative addresses`_.  Type context descriptors are signed with the ``DA`` key
+without address diversity (except when stored in type metadata) and with
+a constant discriminator of ``0xae86``.
+
+Swift Value Witnesses
+~~~~~~~~~~~~~~~~~~~~~
+
+Value witness functions in Swift are signed in the value witness table using
+the ``IA`` key with address diversity and an operation-specific constant
+discriminator which can be found in the Swift project headers.
+
+Swift Coroutines
+~~~~~~~~~~~~~~~~
+
+Resumption functions for Swift coroutines are signed using the ``IA`` key
+without address diversity and with a constant discriminator derived from the
+yield type of the coroutine.  Resumption functions cannot be signed with
+address diversity as they are returned directly in registers from the
+coroutine.
+
 
 
 
