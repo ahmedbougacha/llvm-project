@@ -5093,7 +5093,7 @@ ItaniumCXXABI::getSignedVirtualMemberFunctionPointer(const CXXMethodDecl *MD) {
   llvm::Constant *thunk = getOrCreateVirtualFunctionPointerThunk(origMD);
   QualType funcType = CGM.getContext().getMemberPointerType(
       MD->getType(), MD->getParent()->getTypeForDecl());
-  return CGM.getMemberFunctionPointer(thunk, funcType, MD);
+  return CGM.getMemberFunctionPointer(thunk, funcType);
 }
 
 void WebAssemblyCXXABI::emitBeginCatch(CodeGenFunction &CGF,
