@@ -623,6 +623,10 @@ public:
         "Mach-O IFunc lowering is not yet supported on this target");
   }
 
+  /// Lower the specified BlockAddress to an MCExpr.
+  virtual const MCExpr *
+  lowerBlockAddressConstant(const BlockAddress *BA);
+
   /// Emit N NOP instructions.
   void emitNops(unsigned N);
 
