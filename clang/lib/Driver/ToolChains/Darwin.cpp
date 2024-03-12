@@ -1232,6 +1232,10 @@ void DarwinClang::addClangTargetOptions(
                            options::OPT_fno_ptrauth_calls))
       CC1Args.push_back("-fptrauth-calls");
 
+    if (!DriverArgs.hasArg(options::OPT_fptrauth_indirect_gotos,
+                           options::OPT_fno_ptrauth_indirect_gotos))
+      CC1Args.push_back("-fptrauth-indirect-gotos");
+
     if (!DriverArgs.hasArg(options::OPT_fptrauth_auth_traps,
                            options::OPT_fno_ptrauth_auth_traps))
       CC1Args.push_back("-fptrauth-auth-traps");

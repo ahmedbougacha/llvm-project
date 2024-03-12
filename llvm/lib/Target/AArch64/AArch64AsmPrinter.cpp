@@ -27,6 +27,7 @@
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/SmallSet.h"
+#include "llvm/ADT/StableHash.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/Twine.h"
 #include "llvm/BinaryFormat/COFF.h"
@@ -107,6 +108,9 @@ public:
   const MCExpr *
   lowerConstantPtrAuth(const ConstantPtrAuth &CPA) override;
 
+  const MCExpr *
+  lowerBlockAddressConstant(const BlockAddress *BA) override;
+
   void emitStartOfAsmFile(Module &M) override;
   void emitJumpTableInfo() override;
   std::tuple<const MCSymbol *, uint64_t, const MCSymbol *,
@@ -142,7 +146,7 @@ public:
 
   void emitSled(const MachineInstr &MI, SledKind Kind);
 
-  // Emit the sequence for BLRA (authenticate + branch).
+  // Emit the sequence for BRA/BLRA (authenticate + branch/call).
   void emitPtrauthBranch(const MachineInstr *MI);
   // Emit the sequence for AUT or AUTPAC.
   void emitPtrauthAuthResign(const MachineInstr *MI);
@@ -1018,6 +1022,11 @@ void AArch64AsmPrinter::printOperand(const MachineInstr *MI, unsigned OpNum,
   }
   case MachineOperand::MO_BlockAddress: {
     MCSymbol *Sym = GetBlockAddressSymbol(MO.getBlockAddress());
+
+    if (MO.getBlockAddress()->getFunction()->hasFnAttribute(
+        "ptrauth-indirect-gotos"))
+      llvm_unreachable("unimplemented ptrauth blockaddress operand");
+
     Sym->print(O, MAI);
     break;
   }
@@ -1924,6 +1933,7 @@ void AArch64AsmPrinter::emitPtrauthAuthResign(const MachineInstr *MI) {
 
 void AArch64AsmPrinter::emitPtrauthBranch(const MachineInstr *MI) {
   unsigned InstsEmitted = 0;
+  bool IsCall = MI->getOpcode() == AArch64::BLRA;
 
   unsigned BrTarget = MI->getOperand(0).getReg();
   auto Key = (AArch64PACKey::ID)MI->getOperand(1).getImm();
@@ -1939,10 +1949,17 @@ void AArch64AsmPrinter::emitPtrauthBranch(const MachineInstr *MI) {
          "Invalid auth call key");
 
   unsigned Opc;
-  if (Key == AArch64PACKey::IA)
-    Opc = IsZeroDisc ? AArch64::BLRAAZ : AArch64::BLRAA;
-  else
-    Opc = IsZeroDisc ? AArch64::BLRABZ : AArch64::BLRAB;
+  if (IsCall) {
+    if (Key == AArch64PACKey::IA)
+      Opc = IsZeroDisc ? AArch64::BLRAAZ : AArch64::BLRAA;
+    else
+      Opc = IsZeroDisc ? AArch64::BLRABZ : AArch64::BLRAB;
+  } else {
+    if (Key == AArch64PACKey::IA)
+      Opc = IsZeroDisc ? AArch64::BRAAZ : AArch64::BRAA;
+    else
+      Opc = IsZeroDisc ? AArch64::BRABZ : AArch64::BRAB;
+  }
 
   MCInst BRInst;
   BRInst.setOpcode(Opc);
@@ -2009,6 +2026,19 @@ AArch64AsmPrinter::lowerConstantPtrAuth(const ConstantPtrAuth &CPA) {
   // Finally build the complete @AUTH expr.
   return AArch64AuthMCExpr::create(Sym, Disc, AArch64PACKey::ID(KeyID),
                                    CPA.hasAddressDiversity(), Ctx);
+}
+
+const MCExpr *
+AArch64AsmPrinter::lowerBlockAddressConstant(const BlockAddress *BA) {
+  const MCExpr *BAE = AsmPrinter::lowerBlockAddressConstant(BA);
+  if (!BA->getFunction()->hasFnAttribute("ptrauth-indirect-gotos"))
+    return BAE;
+
+  std::string StringDisc =
+    (BA->getFunction()->getName() + " blockaddress").str();
+  uint64_t Disc = getPointerAuthStringDiscriminator(StringDisc);
+  return AArch64AuthMCExpr::create(BAE, Disc, AArch64PACKey::IA,
+                                   /* HasAddressDiversity= */false, OutContext);
 }
 
 // Simple pseudo-instructions have their lowering (with expansion to real
@@ -2151,6 +2181,7 @@ void AArch64AsmPrinter::emitInstruction(const MachineInstr *MI) {
     emitPtrauthAuthResign(MI);
     return;
 
+  case AArch64::BRA:
   case AArch64::BLRA:
     emitPtrauthBranch(MI);
     return;

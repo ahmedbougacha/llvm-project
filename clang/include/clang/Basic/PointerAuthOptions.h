@@ -229,6 +229,9 @@ struct PointerAuthOptions {
   /// Should return addresses be authenticated?
   bool ReturnAddresses = false;
 
+  /// Do indirect goto label addresses need to be authenticated?
+  bool IndirectGotos = false;
+
   /// The ABI for C function pointers.
   PointerAuthSchema FunctionPointers;
 

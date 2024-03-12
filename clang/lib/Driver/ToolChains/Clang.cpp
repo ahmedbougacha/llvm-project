@@ -1781,6 +1781,9 @@ void Clang::AddAArch64TargetArgs(const ArgList &Args,
   if (Args.hasArg(options::OPT_fbranch_target_identification,
                   options::OPT_fno_branch_target_identification, false))
     CmdArgs.push_back("-mbranch-target-enforce");
+
+  Args.addOptInFlag(CmdArgs, options::OPT_fptrauth_indirect_gotos,
+                    options::OPT_fno_ptrauth_indirect_gotos);
 }
 
 void Clang::AddLoongArchTargetArgs(const ArgList &Args,

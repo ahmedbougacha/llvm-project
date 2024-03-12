@@ -25,6 +25,7 @@
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallSet.h"
 #include "llvm/ADT/SmallVector.h"
+#include "llvm/ADT/StableHash.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/Twine.h"
@@ -506,6 +507,7 @@ AArch64TargetLowering::AArch64TargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::SELECT_CC, MVT::f64, Custom);
   setOperationAction(ISD::BR_JT, MVT::Other, Custom);
   setOperationAction(ISD::JumpTable, MVT::i64, Custom);
+  setOperationAction(ISD::BRIND, MVT::Other, Custom);
   setOperationAction(ISD::SETCCCARRY, MVT::i64, Custom);
 
   setOperationAction(ISD::PtrAuthGlobalAddress, MVT::i64, Custom);
@@ -6480,6 +6482,8 @@ SDValue AArch64TargetLowering::LowerOperation(SDValue Op,
     return LowerJumpTable(Op, DAG);
   case ISD::BR_JT:
     return LowerBR_JT(Op, DAG);
+  case ISD::BRIND:
+    return LowerBRIND(Op, DAG);
   case ISD::ConstantPool:
     return LowerConstantPool(Op, DAG);
   case ISD::BlockAddress:
@@ -10508,6 +10512,29 @@ SDValue AArch64TargetLowering::LowerBR_JT(SDValue Op,
   return DAG.getNode(ISD::BRIND, DL, MVT::Other, JTInfo, SDValue(Dest, 0));
 }
 
+SDValue AArch64TargetLowering::LowerBRIND(SDValue Op,
+                                          SelectionDAG &DAG) const {
+  // On arm64e, BRIND is only used for indirectbr.  Jump table branches are
+  // independently lowered to BRAA.
+  MachineFunction &MF = DAG.getMachineFunction();
+  if (!MF.getFunction().hasFnAttribute("ptrauth-indirect-gotos"))
+    return SDValue();
+
+  SDLoc DL(Op);
+  SDValue Chain = Op.getOperand(0);
+  SDValue Dest = Op.getOperand(1);
+
+  std::string StringDisc = (MF.getName() + " blockaddress").str();
+  SDValue Disc = DAG.getTargetConstant(
+    getPointerAuthStringDiscriminator(StringDisc), DL, MVT::i64);
+  SDValue Key = DAG.getTargetConstant(AArch64PACKey::IA, DL, MVT::i32);
+  SDValue AddrDisc = DAG.getRegister(AArch64::XZR, MVT::i64);
+
+  SDNode *BrA = DAG.getMachineNode(AArch64::BRA, DL, MVT::Other,
+                                   {Dest, Key, Disc, AddrDisc, Chain});
+  return SDValue(BrA, 0);
+}
+
 SDValue AArch64TargetLowering::LowerConstantPool(SDValue Op,
                                                  SelectionDAG &DAG) const {
   ConstantPoolSDNode *CP = cast<ConstantPoolSDNode>(Op);
@@ -10528,6 +10555,31 @@ SDValue AArch64TargetLowering::LowerConstantPool(SDValue Op,
 SDValue AArch64TargetLowering::LowerBlockAddress(SDValue Op,
                                                SelectionDAG &DAG) const {
   BlockAddressSDNode *BA = cast<BlockAddressSDNode>(Op);
+
+  // On arm64e, BRIND is only used for indirectbr.  Jump table branches are
+  // independently lowered to BRAA.
+  Function *BAFn = BA->getBlockAddress()->getFunction();
+  if (BAFn->hasFnAttribute("ptrauth-indirect-gotos")) {
+    SDLoc DL(Op);
+
+    // This isn't cheap, but BRIND is rare.
+    SDValue TargetBA =
+      DAG.getTargetBlockAddress(BA->getBlockAddress(), BA->getValueType(0));
+
+    std::string StringDisc = (BAFn->getName() + " blockaddress").str();
+    SDValue Disc = DAG.getTargetConstant(
+      getPointerAuthStringDiscriminator(StringDisc), DL, MVT::i64);
+
+    SDValue Key = DAG.getTargetConstant(AArch64PACKey::IA, DL, MVT::i32);
+    SDValue AddrDisc = DAG.getRegister(AArch64::XZR, MVT::i64);
+
+    SDNode *MOV =
+      DAG.getMachineNode(AArch64::MOVaddrPAC, DL, {MVT::Other, MVT::Glue},
+                         {TargetBA, Key, AddrDisc, Disc});
+    return DAG.getCopyFromReg(SDValue(MOV, 0), DL, AArch64::X16, MVT::i64,
+                              SDValue(MOV, 1));
+  }
+
   CodeModel::Model CM = getTargetMachine().getCodeModel();
   if (CM == CodeModel::Large && !Subtarget->isTargetMachO()) {
     if (!getTargetMachine().isPositionIndependent())

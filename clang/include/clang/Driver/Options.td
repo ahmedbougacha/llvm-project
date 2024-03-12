@@ -4194,6 +4194,8 @@ defm ptrauth_objc_isa : OptInCC1FFlag<"ptrauth-objc-isa",
   "Enable signing and authentication of Objective-C object's 'isa' field">;
 defm ptrauth_objc_isa_masking : OptInCC1FFlag<"ptrauth-objc-isa-masking",
   "Enable pre- and post-authentication masking mode of Objective-c isa pointers">;
+defm ptrauth_indirect_gotos : OptInCC1FFlag<"ptrauth-indirect-gotos",
+  "Enable signing and authentication of indirect goto targets">;
 }
 
 let Group = f_Group in {
