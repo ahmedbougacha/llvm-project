@@ -1,6 +1,6 @@
 // RUN: %clang_cc1 -triple arm64-apple-ios -std=c++98 -fptrauth-calls -fapple-kext -fno-rtti -disable-O0-optnone -emit-llvm -o - %s | FileCheck %s
 
-// CHECK: @_ZTV5TemplIiE = internal unnamed_addr constant { [7 x ptr] } { [7 x ptr] [ptr null, ptr null, ptr @_ZN5TemplIiED1Ev.ptrauth, ptr @_ZN5TemplIiED0Ev.ptrauth, ptr @_ZN5TemplIiE1fEv.ptrauth, ptr @_ZN5TemplIiE1gEv.ptrauth, ptr null] }
+// CHECK: @_ZTV5TemplIiE = internal unnamed_addr constant { [7 x ptr] } { [7 x ptr] [ptr null, ptr null, ptr ptrauth (ptr @_ZN5TemplIiED1Ev, i32 0, ptr getelementptr inbounds ({ [7 x ptr] }, ptr @_ZTV5TemplIiE, i32 0, i32 0, i32 2), i64 57986), ptr ptrauth (ptr @_ZN5TemplIiED0Ev, i32 0, ptr getelementptr inbounds ({ [7 x ptr] }, ptr @_ZTV5TemplIiE, i32 0, i32 0, i32 3), i64 22856), ptr ptrauth (ptr @_ZN5TemplIiE1fEv, i32 0, ptr getelementptr inbounds ({ [7 x ptr] }, ptr @_ZTV5TemplIiE, i32 0, i32 0, i32 4), i64 22189), ptr ptrauth (ptr @_ZN5TemplIiE1gEv, i32 0, ptr getelementptr inbounds ({ [7 x ptr] }, ptr @_ZTV5TemplIiE, i32 0, i32 0, i32 5), i64 9912), ptr null] }, align 8
 
 struct B1 {
   virtual ~B1();
