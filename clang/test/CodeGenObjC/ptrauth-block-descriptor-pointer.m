@@ -7,18 +7,12 @@ void a() {
 
 // CHECK: @"__block_descriptor_32_e5_v8\01?0l" = linkonce_odr hidden unnamed_addr constant
 
-// CHECK: @"__block_descriptor_32_e5_v8\01?0l.ptrauth" = private constant { ptr, i32, i64, i64 } {
-// CHECK-SAME: ptr @"__block_descriptor_32_e5_v8\01?0l",
-// CHECK-SAME: i32 2,
-// CHECK-SAME: i64 ptrtoint (ptr getelementptr inbounds ({ {{.*}} }, ptr @__block_literal_global, i32 0, i32 4) to i64),
-// CHECK-SAME: i64 49339 }
-
 // CHECK: @__block_literal_global = internal constant { ptr, i32, i32, ptr, ptr } {
 // CHECK-SAME: ptr @_NSConcreteGlobalBlock,
 // CHECK-SAME: i32 1342177280
 // CHECK-SAME: i32 0,
-// CHECK-SAME: ptr @__a_block_invoke.ptrauth,
-// CHECK-SAME: ptr @"__block_descriptor_32_e5_v8\01?0l.ptrauth" }
+// CHECK-SAME: ptr ptrauth (ptr @__a_block_invoke, i32 0, ptr getelementptr inbounds ({ ptr, i32, i32, ptr, ptr }, ptr @__block_literal_global, i32 0, i32 3), i64 0),
+// CHECK-SAME: ptr ptrauth (ptr @"__block_descriptor_32_e5_v8\01?0l", i32 2, ptr getelementptr inbounds ({ ptr, i32, i32, ptr, ptr }, ptr @__block_literal_global, i32 0, i32 4), i64 49339)
 
 void b(int p) {
   // CHECK-LABEL: define void @b
