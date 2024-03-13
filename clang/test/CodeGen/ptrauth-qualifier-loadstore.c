@@ -414,11 +414,11 @@ void test_load_data_a() {
 // CHECK-LABEL: define void @test_store_function_i_constant()
 void test_store_function_i_constant() {
 // CHECK:         [[V:%.*]] = alloca ptr,
-// CHECK-NEXT:    [[SIGN:%.*]] = call i64 @llvm.ptrauth.resign(i64 ptrtoint ({{.*}} @external_func.ptrauth to i64), i32 0, i64 18983, i32 1, i64 50)
+// CHECK-NEXT:    [[SIGN:%.*]] = call i64 @llvm.ptrauth.resign(i64 ptrtoint (ptr ptrauth (ptr @external_func, i32 0, ptr null, i64 18983) to i64), i32 0, i64 18983, i32 1, i64 50)
 // CHECK-NEXT:    [[T0:%.*]] = inttoptr i64 [[SIGN]] to ptr
 // CHECK-NEXT:    store ptr [[T0]], ptr [[V]],
   func_t * IQ iqpf = &external_func;
-// CHECK-NEXT:    [[SIGN:%.*]] = call i64 @llvm.ptrauth.resign(i64 ptrtoint ({{.*}} @external_func.ptrauth to i64), i32 0, i64 18983, i32 1, i64 50)
+// CHECK-NEXT:    [[SIGN:%.*]] = call i64 @llvm.ptrauth.resign(i64 ptrtoint (ptr ptrauth (ptr @external_func, i32 0, ptr null, i64 18983) to i64), i32 0, i64 18983, i32 1, i64 50)
 // CHECK-NEXT:    [[T0:%.*]] = inttoptr i64 [[SIGN]] to ptr
 // CHECK-NEXT:    store ptr [[T0]], ptr [[V]],
   iqpf = &external_func;
@@ -573,13 +573,13 @@ void test_store_function_a_constant() {
 // CHECK:         [[V:%.*]] = alloca ptr,
 // CHECK-NEXT:    [[T0:%.*]] = ptrtoint ptr [[V]] to i64
 // CHECK-NEXT:    [[NEWDISC:%.*]] = call i64 @llvm.ptrauth.blend(i64 [[T0]], i64 50)
-// CHECK-NEXT:    [[SIGN:%.*]] = call i64 @llvm.ptrauth.resign(i64 ptrtoint ({{.*}} @external_func.ptrauth to i64), i32 0, i64 18983, i32 1, i64 [[NEWDISC]])
+// CHECK-NEXT:    [[SIGN:%.*]] = call i64 @llvm.ptrauth.resign(i64 ptrtoint (ptr ptrauth (ptr @external_func, i32 0, ptr null, i64 18983) to i64), i32 0, i64 18983, i32 1, i64 [[NEWDISC]])
 // CHECK-NEXT:    [[T0:%.*]] = inttoptr i64 [[SIGN]] to ptr
 // CHECK-NEXT:    store ptr [[T0]], ptr [[V]],
   func_t * AQ aqpf = &external_func;
 // CHECK-NEXT:    [[T0:%.*]] = ptrtoint ptr [[V]] to i64
 // CHECK-NEXT:    [[NEWDISC:%.*]] = call i64 @llvm.ptrauth.blend(i64 [[T0]], i64 50)
-// CHECK-NEXT:    [[SIGN:%.*]] = call i64 @llvm.ptrauth.resign(i64 ptrtoint ({{.*}} @external_func.ptrauth to i64), i32 0, i64 18983, i32 1, i64 [[NEWDISC]])
+// CHECK-NEXT:    [[SIGN:%.*]] = call i64 @llvm.ptrauth.resign(i64 ptrtoint (ptr ptrauth (ptr @external_func, i32 0, ptr null, i64 18983) to i64), i32 0, i64 18983, i32 1, i64 [[NEWDISC]])
 // CHECK-NEXT:    [[T0:%.*]] = inttoptr i64 [[SIGN]] to ptr
 // CHECK-NEXT:    store ptr [[T0]], ptr [[V]],
   aqpf = &external_func;

@@ -24,18 +24,13 @@ SignAndAuthIntptr globalSignAndAuthIntptr = (__UINT64_TYPE__)&globalSignAndAuthP
 // CHECK: @.str.1 = private unnamed_addr constant [5 x i8] c"foo1\00", align 1
 // CHECK: @globalStripPointer = global ptr @.str.1, align 8
 // CHECK: @.str.2 = private unnamed_addr constant [5 x i8] c"foo2\00", align 1
-// CHECK: @.str.2.ptrauth = private constant { ptr, i32, i64, i64 } { ptr @.str.2, i32 1, i64 ptrtoint (ptr @globalSignAndStripPointer to i64), i64 102 }, section "llvm.ptrauth", align 8
-// CHECK: @globalSignAndStripPointer = global ptr @.str.2.ptrauth, align 8
+// CHECK: @globalSignAndStripPointer = global ptr ptrauth (ptr @.str.2, i32 1, ptr @globalSignAndStripPointer, i64 102), align 8
 // CHECK: @.str.3 = private unnamed_addr constant [5 x i8] c"foo3\00", align 1
-// CHECK: @.str.3.ptrauth = private constant { ptr, i32, i64, i64 } { ptr @.str.3, i32 1, i64 ptrtoint (ptr @globalSignAndAuthPointer to i64), i64 103 }, section "llvm.ptrauth", align 8
-// CHECK: @globalSignAndAuthPointer = global ptr @.str.3.ptrauth, align 8
+// CHECK: @globalSignAndAuthPointer = global ptr ptrauth (ptr @.str.3, i32 1, ptr @globalSignAndAuthPointer, i64 103), align 8
 // CHECK: @globalNoneIntptr = global i64 ptrtoint (ptr @globalNonePointer to i64), align 8
-// CHECK: @globalStripPointer.ptrauth = private constant { ptr, i32, i64, i64 } { ptr @globalStripPointer, i32 1, i64 0, i64 105 }, section "llvm.ptrauth", align 8
-// CHECK: @globalStripIntptr = global i64 ptrtoint (ptr @globalStripPointer.ptrauth to i64), align 8
-// CHECK: @globalSignAndStripPointer.ptrauth = private constant { ptr, i32, i64, i64 } { ptr @globalSignAndStripPointer, i32 1, i64 0, i64 106 }, section "llvm.ptrauth", align 8
-// CHECK: @globalSignAndStripIntptr = global i64 ptrtoint (ptr @globalSignAndStripPointer.ptrauth to i64), align 8
-// CHECK: @globalSignAndAuthPointer.ptrauth = private constant { ptr, i32, i64, i64 } { ptr @globalSignAndAuthPointer, i32 1, i64 0, i64 107 }, section "llvm.ptrauth", align 8
-// CHECK: @globalSignAndAuthIntptr = global i64 ptrtoint (ptr @globalSignAndAuthPointer.ptrauth to i64), align 8
+// CHECK: @globalStripIntptr = global i64 ptrtoint (ptr ptrauth (ptr @globalStripPointer, i32 1, ptr null, i64 105) to i64), align 8
+// CHECK: @globalSignAndStripIntptr = global i64 ptrtoint (ptr ptrauth (ptr @globalSignAndStripPointer, i32 1, ptr null, i64 106) to i64), align 8
+// CHECK: @globalSignAndAuthIntptr = global i64 ptrtoint (ptr ptrauth (ptr @globalSignAndAuthPointer, i32 1, ptr null, i64 107) to i64), align 8
 
 typedef struct {
   NonePointer ptr;
