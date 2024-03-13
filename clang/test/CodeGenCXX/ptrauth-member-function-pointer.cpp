@@ -5,36 +5,19 @@
 // RUN: %clang_cc1 -triple arm64-apple-ios -fptrauth-calls -fptrauth-intrinsics -emit-llvm -std=c++11 -O1 -disable-llvm-passes -stack-protector 3 -o - %s | FileCheck %s -check-prefix=STACK-PROT
 
 
-// CHECK: @_ZN5Base011nonvirtual0Ev.ptrauth = private constant { ptr, i32, i64, i64 } { ptr @_ZN5Base011nonvirtual0Ev, i32 0, i64 0, i64 [[TYPEDISC0:22163]] }, section "llvm.ptrauth", align 8
-// CHECK: @_ZN5Base08virtual1Ev_vfpthunk_.ptrauth = private constant { ptr, i32, i64, i64 } { ptr @_ZN5Base08virtual1Ev_vfpthunk_, i32 0, i64 0, i64 [[TYPEDISC0]] }, section "llvm.ptrauth", align 8
-// CHECK: @_ZN5Base08virtual3Ev_vfpthunk_.ptrauth = private constant { ptr, i32, i64, i64 } { ptr @_ZN5Base08virtual3Ev_vfpthunk_, i32 0, i64 0, i64 [[TYPEDISC0]] }, section "llvm.ptrauth", align 8
-// CHECK: @_ZN5Base016virtual_variadicEiz_vfpthunk_.ptrauth = private constant { ptr, i32, i64, i64 } { ptr @_ZN5Base016virtual_variadicEiz_vfpthunk_, i32 0, i64 0, i64 34368 }, section "llvm.ptrauth", align 8
-// CHECK: @_ZN5Base011nonvirtual0Ev.ptrauth.1 = private constant { ptr, i32, i64, i64 } { ptr @_ZN5Base011nonvirtual0Ev, i32 0, i64 0, i64 [[TYPEDISC1:35591]] }, section "llvm.ptrauth", align 8
-// CHECK: @_ZN5Base08virtual1Ev_vfpthunk_.ptrauth.2 = private constant { ptr, i32, i64, i64 } { ptr @_ZN5Base08virtual1Ev_vfpthunk_, i32 0, i64 0, i64 [[TYPEDISC1]] }, section "llvm.ptrauth", align 8
-// CHECK: @_ZN5Base08virtual3Ev_vfpthunk_.ptrauth.3 = private constant { ptr, i32, i64, i64 } { ptr @_ZN5Base08virtual3Ev_vfpthunk_, i32 0, i64 0, i64 [[TYPEDISC1]] }, section "llvm.ptrauth", align 8
-// CHECK: @_ZN8Derived011nonvirtual5Ev.ptrauth = private constant { ptr, i32, i64, i64 } { ptr @_ZN8Derived011nonvirtual5Ev, i32 0, i64 0, i64 [[TYPEDISC1]] }, section "llvm.ptrauth", align 8
-// CHECK: @_ZN8Derived08virtual6Ev_vfpthunk_.ptrauth = private constant { ptr, i32, i64, i64 } { ptr @_ZN8Derived08virtual6Ev_vfpthunk_, i32 0, i64 0, i64 [[TYPEDISC1]] }, section "llvm.ptrauth", align 8
-// CHECK: @_ZN8Derived010return_aggEv_vfpthunk_.ptrauth = private constant { ptr, i32, i64, i64 } { ptr @_ZN8Derived010return_aggEv_vfpthunk_, i32 0, i64 0, i64 64418 }, section "llvm.ptrauth", align 8
-// CHECK: @_ZN8Derived04sretEv_vfpthunk_.ptrauth = private constant { ptr, i32, i64, i64 } { ptr @_ZN8Derived04sretEv_vfpthunk_, i32 0, i64 0, i64 28187 }, section "llvm.ptrauth", align 8
-// CHECK: @_ZN8Derived011trivial_abiE8TrivialS_vfpthunk_.ptrauth = private constant { ptr, i32, i64, i64 } { ptr @_ZN8Derived011trivial_abiE8TrivialS_vfpthunk_, i32 0, i64 0, i64 8992 }, section "llvm.ptrauth", align 8
-// CHECK: @_ZN5Base18virtual7Ev_vfpthunk_.ptrauth = private constant { ptr, i32, i64, i64 } { ptr @_ZN5Base18virtual7Ev_vfpthunk_, i32 0, i64 0, i64 [[TYPEDISC2:61596]] }, section "llvm.ptrauth", align 8
-// CHECK: @_ZN8Derived18virtual7Ev_vfpthunk_.ptrauth = private constant { ptr, i32, i64, i64 } { ptr @_ZN8Derived18virtual7Ev_vfpthunk_, i32 0, i64 0, i64 25206 }, section "llvm.ptrauth", align 8
-// CHECK: @_ZN5Base08virtual1Ev_vfpthunk_.ptrauth.4 = private constant { ptr, i32, i64, i64 } { ptr @_ZN5Base08virtual1Ev_vfpthunk_, i32 0, i64 0, i64 25206 }, section "llvm.ptrauth", align 8
+// CHECK: @gmethod0 = global { i64, i64 } { i64 ptrtoint (ptr ptrauth (ptr @_ZN5Base011nonvirtual0Ev, i32 0, ptr null, i64 [[TYPEDISC1:35591]]) to i64), i64 0 }, align 8
+// CHECK: @gmethod1 = global { i64, i64 } { i64 ptrtoint (ptr ptrauth (ptr @_ZN8Derived011nonvirtual5Ev, i32 0, ptr null, i64 [[TYPEDISC0:22163]]) to i64), i64 0 }, align 8
+// CHECK: @gmethod2 = global { i64, i64 } { i64 ptrtoint (ptr ptrauth (ptr @_ZN5Base08virtual1Ev_vfpthunk_, i32 0, ptr null, i64 [[TYPEDISC0]]) to i64), i64 0 }, align 8
 
-// CHECK: @gmethod0 = global { i64, i64 } { i64 ptrtoint (ptr @_ZN5Base011nonvirtual0Ev.ptrauth.1 to i64), i64 0 }, align 8
-// CHECK: @_ZN8Derived011nonvirtual5Ev.ptrauth.6 = private constant { ptr, i32, i64, i64 } { ptr @_ZN8Derived011nonvirtual5Ev, i32 0, i64 0, i64 [[TYPEDISC0]] }, section "llvm.ptrauth", align 8
-// CHECK: @gmethod1 = global { i64, i64 } { i64 ptrtoint (ptr @_ZN8Derived011nonvirtual5Ev.ptrauth.6 to i64), i64 0 }, align 8
-// CHECK: @gmethod2 = global { i64, i64 } { i64 ptrtoint (ptr @_ZN5Base08virtual1Ev_vfpthunk_.ptrauth to i64), i64 0 }, align 8
+// CHECK: @__const._Z13testArrayInitv.p0 = private unnamed_addr constant [1 x { i64, i64 }] [{ i64, i64 } { i64 ptrtoint (ptr ptrauth (ptr @_ZN5Base011nonvirtual0Ev, i32 0, ptr null, i64 35591) to i64), i64 0 }], align 8
+// CHECK: @__const._Z13testArrayInitv.p1 = private unnamed_addr constant [1 x { i64, i64 }] [{ i64, i64 } { i64 ptrtoint (ptr ptrauth (ptr @_ZN5Base08virtual1Ev_vfpthunk_, i32 0, ptr null, i64 35591) to i64), i64 0 }], align 8
+// CHECK: @__const._Z13testArrayInitv.c0 = private unnamed_addr constant %struct.Class0 { { i64, i64 } { i64 ptrtoint (ptr ptrauth (ptr @_ZN5Base011nonvirtual0Ev, i32 0, ptr null, i64 35591) to i64), i64 0 } }, align 8
+// CHECK: @__const._Z13testArrayInitv.c1 = private unnamed_addr constant %struct.Class0 { { i64, i64 } { i64 ptrtoint (ptr ptrauth (ptr @_ZN5Base08virtual1Ev_vfpthunk_, i32 0, ptr null, i64 35591) to i64), i64 0 } }, align 8
 
-// CHECK: @__const._Z13testArrayInitv.p0 = private unnamed_addr constant [1 x { i64, i64 }] [{ i64, i64 } { i64 ptrtoint (ptr @_ZN5Base011nonvirtual0Ev.ptrauth.1 to i64), i64 0 }], align 8
-// CHECK: @__const._Z13testArrayInitv.p1 = private unnamed_addr constant [1 x { i64, i64 }] [{ i64, i64 } { i64 ptrtoint (ptr @_ZN5Base08virtual1Ev_vfpthunk_.ptrauth.2 to i64), i64 0 }], align 8
-// CHECK: @__const._Z13testArrayInitv.c0 = private unnamed_addr constant %struct.Class0 { { i64, i64 } { i64 ptrtoint (ptr @_ZN5Base011nonvirtual0Ev.ptrauth.1 to i64), i64 0 } }, align 8
-// CHECK: @__const._Z13testArrayInitv.c1 = private unnamed_addr constant %struct.Class0 { { i64, i64 } { i64 ptrtoint (ptr @_ZN5Base08virtual1Ev_vfpthunk_.ptrauth.2 to i64), i64 0 } }, align 8
-
-// CHECK: @_ZTV5Base0 = unnamed_addr constant { [5 x ptr] } { [5 x ptr] [ptr null, ptr @_ZTI5Base0, ptr @_ZN5Base08virtual1Ev.ptrauth, ptr @_ZN5Base08virtual3Ev.ptrauth, ptr @_ZN5Base016virtual_variadicEiz.ptrauth] }, align 8
-// CHECK: @_ZN5Base08virtual1Ev.ptrauth = private constant { ptr, i32, i64, i64 } { ptr @_ZN5Base08virtual1Ev, i32 0, i64 ptrtoint (ptr getelementptr inbounds ({ [5 x ptr] }, ptr @_ZTV5Base0, i32 0, i32 0, i32 2) to i64), i64 55600 }, section "llvm.ptrauth", align 8
-// CHECK: @_ZN5Base08virtual3Ev.ptrauth = private constant { ptr, i32, i64, i64 } { ptr @_ZN5Base08virtual3Ev, i32 0, i64 ptrtoint (ptr getelementptr inbounds ({ [5 x ptr] }, ptr @_ZTV5Base0, i32 0, i32 0, i32 3) to i64), i64 53007 }, section "llvm.ptrauth", align 8
-// CHECK: @_ZN5Base016virtual_variadicEiz.ptrauth = private constant { ptr, i32, i64, i64 } { ptr @_ZN5Base016virtual_variadicEiz, i32 0, i64 ptrtoint (ptr getelementptr inbounds ({ [5 x ptr] }, ptr @_ZTV5Base0, i32 0, i32 0, i32 4) to i64), i64 7464 }, section "llvm.ptrauth", align 8
+// CHECK: @_ZTV5Base0 = unnamed_addr constant { [5 x ptr] } { [5 x ptr] [ptr null, ptr @_ZTI5Base0,
+// CHECK-SAME: ptr ptrauth (ptr @_ZN5Base08virtual1Ev, i32 0, ptr getelementptr inbounds ({ [5 x ptr] }, ptr @_ZTV5Base0, i32 0, i32 0, i32 2), i64 55600),
+// CHECK-SAME: ptr ptrauth (ptr @_ZN5Base08virtual3Ev, i32 0, ptr getelementptr inbounds ({ [5 x ptr] }, ptr @_ZTV5Base0, i32 0, i32 0, i32 3), i64 53007),
+// CHECK-SAME: ptr ptrauth (ptr @_ZN5Base016virtual_variadicEiz, i32 0, ptr getelementptr inbounds ({ [5 x ptr] }, ptr @_ZTV5Base0, i32 0, i32 0, i32 4), i64 7464)] }, align 8
 
 typedef __SIZE_TYPE__ size_t;
 
@@ -106,21 +89,21 @@ struct Class0 {
 // CHECK-NEXT: %[[METHOD5:.*]] = alloca { i64, i64 }, align 8
 // CHECK-NEXT: %[[METHOD6:.*]] = alloca { i64, i64 }, align 8
 // CHECK-NEXT: %[[METHOD7:.*]] = alloca { i64, i64 }, align 8
-// CHECK: store { i64, i64 } { i64 ptrtoint (ptr @_ZN5Base011nonvirtual0Ev.ptrauth to i64), i64 0 }, ptr %[[METHOD0]], align 8
-// CHECK-NEXT: store { i64, i64 } { i64 ptrtoint (ptr @_ZN5Base08virtual1Ev_vfpthunk_.ptrauth to i64), i64 0 }, ptr %[[METHOD0]], align 8
-// CHECK-NEXT: store { i64, i64 } { i64 ptrtoint (ptr @_ZN5Base08virtual3Ev_vfpthunk_.ptrauth to i64), i64 0 }, ptr %[[METHOD0]], align 8
-// CHECK: store { i64, i64 } { i64 ptrtoint (ptr @_ZN5Base016virtual_variadicEiz_vfpthunk_.ptrauth to i64), i64 0 }, ptr %[[VARMETHOD1]], align 8
-// CHECK: store { i64, i64 } { i64 ptrtoint (ptr @_ZN5Base011nonvirtual0Ev.ptrauth.1 to i64), i64 0 }, ptr %[[METHOD2]], align 8
-// CHECK-NEXT: store { i64, i64 } { i64 ptrtoint (ptr @_ZN5Base08virtual1Ev_vfpthunk_.ptrauth.2 to i64), i64 0 }, ptr %[[METHOD2]], align 8
-// CHECK-NEXT: store { i64, i64 } { i64 ptrtoint (ptr @_ZN5Base08virtual3Ev_vfpthunk_.ptrauth.3 to i64), i64 0 }, ptr %[[METHOD2]], align 8
-// CHECK-NEXT: store { i64, i64 } { i64 ptrtoint (ptr @_ZN8Derived011nonvirtual5Ev.ptrauth to i64), i64 0 }, ptr %[[METHOD2]], align 8
-// CHECK-NEXT: store { i64, i64 } { i64 ptrtoint (ptr @_ZN8Derived08virtual6Ev_vfpthunk_.ptrauth to i64), i64 0 }, ptr %[[METHOD2]], align 8
-// CHECK: store { i64, i64 } { i64 ptrtoint (ptr @_ZN8Derived010return_aggEv_vfpthunk_.ptrauth to i64), i64 0 }, ptr %[[METHOD3]], align 8
-// CHECK: store { i64, i64 } { i64 ptrtoint (ptr @_ZN8Derived04sretEv_vfpthunk_.ptrauth to i64), i64 0 }, ptr %[[METHOD4]], align 8
-// CHECK: store { i64, i64 } { i64 ptrtoint (ptr @_ZN8Derived011trivial_abiE8TrivialS_vfpthunk_.ptrauth to i64), i64 0 }, ptr %[[METHOD5]], align 8
-// CHECK: store { i64, i64 } { i64 ptrtoint (ptr @_ZN5Base18virtual7Ev_vfpthunk_.ptrauth to i64), i64 0 }, ptr %[[METHOD6]], align 8
-// CHECK: store { i64, i64 } { i64 ptrtoint (ptr @_ZN8Derived18virtual7Ev_vfpthunk_.ptrauth to i64), i64 0 }, ptr %[[METHOD7]], align 8
-// CHECK-NEXT: store { i64, i64 } { i64 ptrtoint (ptr @_ZN5Base08virtual1Ev_vfpthunk_.ptrauth.4 to i64), i64 0 }, ptr %[[METHOD7]], align 8
+// CHECK: store { i64, i64 } { i64 ptrtoint (ptr ptrauth (ptr @_ZN5Base011nonvirtual0Ev, i32 0, ptr null, i64 [[TYPEDISC0]]) to i64), i64 0 }, ptr %[[METHOD0]], align 8
+// CHECK-NEXT: store { i64, i64 } { i64 ptrtoint (ptr ptrauth (ptr @_ZN5Base08virtual1Ev_vfpthunk_, i32 0, ptr null, i64 [[TYPEDISC0]]) to i64), i64 0 }, ptr %[[METHOD0]], align 8
+// CHECK-NEXT: store { i64, i64 } { i64 ptrtoint (ptr ptrauth (ptr @_ZN5Base08virtual3Ev_vfpthunk_, i32 0, ptr null, i64 [[TYPEDISC0]]) to i64), i64 0 }, ptr %[[METHOD0]], align 8
+// CHECK: store { i64, i64 } { i64 ptrtoint (ptr ptrauth (ptr @_ZN5Base016virtual_variadicEiz_vfpthunk_, i32 0, ptr null, i64 34368) to i64), i64 0 }, ptr %[[VARMETHOD1]], align 8
+// CHECK: store { i64, i64 } { i64 ptrtoint (ptr ptrauth (ptr @_ZN5Base011nonvirtual0Ev, i32 0, ptr null, i64 [[TYPEDISC1]]) to i64), i64 0 }, ptr %[[METHOD2]], align 8
+// CHECK-NEXT: store { i64, i64 } { i64 ptrtoint (ptr ptrauth (ptr @_ZN5Base08virtual1Ev_vfpthunk_, i32 0, ptr null, i64 [[TYPEDISC1]]) to i64), i64 0 }, ptr %[[METHOD2]], align 8
+// CHECK-NEXT: store { i64, i64 } { i64 ptrtoint (ptr ptrauth (ptr @_ZN5Base08virtual3Ev_vfpthunk_, i32 0, ptr null, i64 [[TYPEDISC1]]) to i64), i64 0 }, ptr %[[METHOD2]], align 8
+// CHECK-NEXT: store { i64, i64 } { i64 ptrtoint (ptr ptrauth (ptr @_ZN8Derived011nonvirtual5Ev, i32 0, ptr null, i64 [[TYPEDISC1]]) to i64), i64 0 }, ptr %[[METHOD2]], align 8
+// CHECK-NEXT: store { i64, i64 } { i64 ptrtoint (ptr ptrauth (ptr @_ZN8Derived08virtual6Ev_vfpthunk_, i32 0, ptr null, i64 [[TYPEDISC1]]) to i64), i64 0 }, ptr %[[METHOD2]], align 8
+// CHECK: store { i64, i64 } { i64 ptrtoint (ptr ptrauth (ptr @_ZN8Derived010return_aggEv_vfpthunk_, i32 0, ptr null, i64 64418) to i64), i64 0 }, ptr %[[METHOD3]], align 8
+// CHECK: store { i64, i64 } { i64 ptrtoint (ptr ptrauth (ptr @_ZN8Derived04sretEv_vfpthunk_, i32 0, ptr null, i64 28187) to i64), i64 0 }, ptr %[[METHOD4]], align 8
+// CHECK: store { i64, i64 } { i64 ptrtoint (ptr ptrauth (ptr @_ZN8Derived011trivial_abiE8TrivialS_vfpthunk_, i32 0, ptr null, i64 8992) to i64), i64 0 }, ptr %[[METHOD5]], align 8
+// CHECK: store { i64, i64 } { i64 ptrtoint (ptr ptrauth (ptr @_ZN5Base18virtual7Ev_vfpthunk_, i32 0, ptr null, i64 [[TYPEDISC2:61596]]) to i64), i64 0 }, ptr %[[METHOD6]], align 8
+// CHECK: store { i64, i64 } { i64 ptrtoint (ptr ptrauth (ptr @_ZN8Derived18virtual7Ev_vfpthunk_, i32 0, ptr null, i64 25206) to i64), i64 0 }, ptr %[[METHOD7]], align 8
+// CHECK-NEXT: store { i64, i64 } { i64 ptrtoint (ptr ptrauth (ptr @_ZN5Base08virtual1Ev_vfpthunk_, i32 0, ptr null, i64 25206) to i64), i64 0 }, ptr %[[METHOD7]], align 8
 // CHECK: ret void
 
 // CHECK: define linkonce_odr hidden void @_ZN5Base08virtual1Ev_vfpthunk_(ptr noundef %[[THIS:.*]])
@@ -369,7 +352,7 @@ void testConversion3(MethodTy1 method1) {
 
 // CHECK: define void @_Z15testConversion4v(
 // CHECK: %[[METHOD0:.*]] = alloca { i64, i64 }, align 8
-// CHECK: store { i64, i64 } { i64 ptrtoint (ptr @_ZN5Base08virtual1Ev_vfpthunk_.ptrauth to i64), i64 0 }, ptr %[[METHOD0]], align 8
+// CHECK: store { i64, i64 } { i64 ptrtoint (ptr ptrauth (ptr @_ZN5Base08virtual1Ev_vfpthunk_, i32 0, ptr null, i64 [[TYPEDISC0]]) to i64), i64 0 }, ptr %[[METHOD0]], align 8
 // CHECK: ret void
 
 void testConversion4() {
@@ -438,8 +421,8 @@ MethodTy0 gmethod2 = reinterpret_cast<MethodTy0>(&Derived0::virtual1);
 // CHECK: call void @llvm.memcpy.p0.p0.i64(ptr align 8 %p1, ptr align 8 @__const._Z13testArrayInitv.p1, i64 16, i1 false)
 // CHECK: call void @llvm.memcpy.p0.p0.i64(ptr align 8 %c0, ptr align 8 @__const._Z13testArrayInitv.c0, i64 16, i1 false)
 // CHECK: call void @llvm.memcpy.p0.p0.i64(ptr align 8 %c1, ptr align 8 @__const._Z13testArrayInitv.c1, i64 16, i1 false)
-// CHECK: store { i64, i64 } { i64 ptrtoint (ptr @_ZN5Base011nonvirtual0Ev.ptrauth.1 to i64), i64 0 }, ptr %{{.*}}, align 8
-// CHECK: store { i64, i64 } { i64 ptrtoint (ptr @_ZN5Base08virtual1Ev_vfpthunk_.ptrauth.2 to i64), i64 0 }, ptr %{{.*}}, align 8
+// CHECK: store { i64, i64 } { i64 ptrtoint (ptr ptrauth (ptr @_ZN5Base011nonvirtual0Ev, i32 0, ptr null, i64 [[TYPEDISC1]]) to i64), i64 0 }, ptr %{{.*}} align 8
+// CHECK: store { i64, i64 } { i64 ptrtoint (ptr ptrauth (ptr @_ZN5Base08virtual1Ev_vfpthunk_, i32 0, ptr null, i64 [[TYPEDISC1]]) to i64), i64 0 }, ptr %{{.*}}, align 8
 
 void initList(std::initializer_list<MethodTy1>);
 

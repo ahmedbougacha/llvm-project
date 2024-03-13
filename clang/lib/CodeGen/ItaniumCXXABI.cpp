@@ -31,7 +31,6 @@
 #include "clang/AST/Type.h"
 #include "clang/CodeGen/ConstantInitBuilder.h"
 #include "llvm/IR/DataLayout.h"
-#include "llvm/IR/GlobalPtrAuthInfo.h"
 #include "llvm/IR/GlobalValue.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/Intrinsics.h"
@@ -882,19 +881,18 @@ llvm::Value *ItaniumCXXABI::EmitMemberDataPointerAddress(
 static llvm::Constant *pointerAuthResignConstant(
     llvm::Value *Ptr, const CGPointerAuthInfo &CurAuthInfo,
     const CGPointerAuthInfo &NewAuthInfo, CodeGenModule &CGM) {
-  std::optional<llvm::GlobalPtrAuthInfo> Info =
-      llvm::GlobalPtrAuthInfo::analyze(Ptr);
+  auto *CPA = dyn_cast<llvm::ConstantPtrAuth>(Ptr);
 
-  if (!Info || !isa<llvm::Constant>(NewAuthInfo.getDiscriminator()))
+  if (!CPA)
     return nullptr;
 
-  assert(Info->getKey()->getZExtValue() == CurAuthInfo.getKey() &&
-         Info->getAddrDiscriminator()->isZeroValue() &&
-         Info->getDiscriminator() == CurAuthInfo.getDiscriminator() &&
+  assert(CPA->getKey()->getZExtValue() == CurAuthInfo.getKey() &&
+         CPA->getAddrDiscriminator()->isZeroValue() &&
+         CPA->getDiscriminator() == CurAuthInfo.getDiscriminator() &&
          "unexpected key or discriminators");
 
   return CGM.getConstantSignedPointer(
-      Info->getPointer(), NewAuthInfo.getKey(), nullptr,
+      CPA->getPointer(), NewAuthInfo.getKey(), nullptr,
       cast<llvm::Constant>(NewAuthInfo.getDiscriminator()));
 }
 
