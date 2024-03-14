@@ -11,10 +11,8 @@
 // CHECK: %[[STRUCT_S4:.*]] = type { i32, i32, ptr, <4 x float> }
 
 // CHECK: @g0 = global %[[STRUCT_S0]] zeroinitializer, align 4
-// CHECK: @[[G0_PTRAUTH:.*]] = private constant { ptr, i32, i64, i64 } { ptr @g0, i32 1, i64 0, i64 100 }, section "llvm.ptrauth", align 8
-// CHECK: @gp0 = global ptr @[[G0_PTRAUTH]], align 8
-// CHECK: @[[PTRAUTH:.*]] = private constant { ptr, i32, i64, i64 } { ptr getelementptr (i8, ptr @g1, i64 24), i32 1, i64 0, i64 100 }, section "llvm.ptrauth", align 8
-// CHECK: @gp1 = global ptr @[[PTRAUTH]], align 8
+// CHECK: @gp0 = global ptr ptrauth (ptr @g0, i32 1, ptr null, i64 100), align 8
+// CHECK: @gp1 = global ptr ptrauth (ptr getelementptr (i8, ptr @g1, i64 24), i32 1, ptr null, i64 100), align 8
 // CHECK: @ga2 = global [4 x i32] zeroinitializer, align 4
 // CHECK: @gf0 = global ptr @ga2, align 8
 // CHECK: @[[CONST_TEST_COMPOUND_LITERAL0_T0:.*]] = private unnamed_addr constant %[[STRUCT_S0]] { i32 1, i32 2 }, align 4

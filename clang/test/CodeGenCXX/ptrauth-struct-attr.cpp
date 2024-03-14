@@ -96,35 +96,28 @@ struct __attribute__((ptrauth_struct(__builtin_ptrauth_struct_key(Derived) + 1, 
 struct ATTR4 S14 : S13<S14> {
 };
 
-// CHECK: @gs0.ptrauth = private constant { ptr, i32, i64, i64 } { ptr @gs0, i32 1, i64 0, i64 100 },
-// CHECK: @gs2 = constant ptr @gs0.ptrauth, align 8
-// CHECK: @gs3 = constant ptr @gs0.ptrauth, align 8
+// CHECK: @gs2 = constant ptr ptrauth (ptr @gs0, i32 1, ptr null, i64 100), align 8
+// CHECK: @gs3 = constant ptr ptrauth (ptr @gs0, i32 1, ptr null, i64 100), align 8
 // CHECK: @gs6 = global %[[STRUCT_S6]] zeroinitializer, align 1
 // CHECK: @gs7 = global ptr @gs6, align 8
 // CHECK: @gs8 = global %[[STRUCT_S7]] zeroinitializer, align 1
-// CHECK: @gs8.ptrauth = private constant { ptr, i32, i64, i64 } { ptr @gs8, i32 1, i64 0, i64 100 }, section "llvm.ptrauth", align 8
-// CHECK: @gs9 = global ptr @gs8.ptrauth, align 8
+// CHECK: @gs9 = global ptr ptrauth (ptr @gs8, i32 1, ptr null, i64 100), align 8
 // CHECK: @gs10 = global %[[STRUCT_S8]] zeroinitializer, align 1
-// CHECK: @gs10.ptrauth = private constant { ptr, i32, i64, i64 } { ptr @gs10, i32 1, i64 0, i64 200 }, section "llvm.ptrauth", align 8
-// CHECK: @gs11 = global ptr @gs10.ptrauth, align 8
+// CHECK: @gs11 = global ptr ptrauth (ptr @gs10, i32 1, ptr null, i64 200), align 8
 // CHECK: @gs12 = global %[[STRUCT_S9]] zeroinitializer, align 1
-// CHECK: @gs12.ptrauth = private constant { ptr, i32, i64, i64 } { ptr @gs12, i32 0, i64 0, i64 202 }, section "llvm.ptrauth", align 8
-// CHECK: @gs13 = global ptr @gs12.ptrauth, align 8
+// CHECK: @gs13 = global ptr ptrauth (ptr @gs12, i32 0, ptr null, i64 202), align 8
 // CHECK: @gs16 = global %[[STRUCT_S12]] zeroinitializer, align 1
-// CHECK: @gs16.ptrauth = private constant { ptr, i32, i64, i64 } { ptr @gs16, i32 2, i64 0, i64 102 }, section "llvm.ptrauth", align 8
-// CHECK: @gs17 = global ptr @gs16.ptrauth, align 8
+// CHECK: @gs17 = global ptr ptrauth (ptr @gs16, i32 2, ptr null, i64 102), align 8
 // CHECK: @gs18 = global %[[STRUCT_S14]] zeroinitializer, align 1
-// CHECK: @gs18.ptrauth = private constant { ptr, i32, i64, i64 } { ptr @gs18, i32 1, i64 0, i64 104 }, section "llvm.ptrauth", align 8
-// CHECK: @gs19 = global ptr @gs18.ptrauth, align 8
+// CHECK: @gs19 = global ptr ptrauth (ptr @gs18, i32 1, ptr null, i64 104), align 8
 // CHECK: @gs20 = global %[[STRUCT_S13]] zeroinitializer, align 1
-// CHECK: @gs20.ptrauth = private constant { ptr, i32, i64, i64 } { ptr @gs20, i32 2, i64 0, i64 105 }, section "llvm.ptrauth", align 8
-// CHECK: @gs21 = global ptr @gs20.ptrauth, align 8
+// CHECK: @gs21 = global ptr ptrauth (ptr @gs20, i32 2, ptr null, i64 105), align 8
 
 // CHECK: define internal void @__cxx_global_var_init()
 // CHECK: %[[V0:.*]] = call i64 @llvm.ptrauth.sign(i64 ptrtoint (ptr @gs0 to i64), i32 1, i64 100)
 // CHECK: %[[V1:.*]] = inttoptr i64 %[[V0]] to ptr
 // CHECK: call ptr @_ZN2S0C1Ev(ptr nonnull align {{[0-9]+}} dereferenceable(24) %[[V1]])
-// CHECK: call i32 @__cxa_atexit(ptr @_ZN2S0D1Ev.ptrauth, ptr @gs0.ptrauth, ptr @__dso_handle)
+// CHECK: call i32 @__cxa_atexit(ptr ptrauth (ptr @_ZN2S0D1Ev, i32 0, ptr null, i64 0), ptr ptrauth (ptr @gs0, i32 1, ptr null, i64 100), ptr @__dso_handle)
 // CHECK: ret void
 // CHECK: }
 
@@ -600,7 +593,7 @@ void test_inheritance1(S11 *a) {
 // CHECK: %[[V3:.*]] = inttoptr i64 %[[V2]] to ptr
 // CHECK: invoke ptr @_ZN2S0C1Ev(ptr nonnull align {{[0-9]+}} dereferenceable(24) %[[V3]])
 
-// CHECK: invoke void @__cxa_throw(ptr %[[EXCEPTION]], ptr @_ZTI2S0, ptr @_ZN2S0D1Ev.ptrauth)
+// CHECK: invoke void @__cxa_throw(ptr %exception, ptr @_ZTI2S0, ptr ptrauth (ptr @_ZN2S0D1Ev, i32 0, ptr null, i64 0))
 
 // CHECK: landingpad { ptr, i32 }
 // CHECK: call void @__cxa_free_exception(ptr %[[EXCEPTION]])
