@@ -6,11 +6,9 @@ target datalayout = "E-p:64:64"
 %T4red215EmptyCollectionV = type opaque
 %TSi = type <{ i64 }>
 
-@prototype.signed = private constant { ptr, i32, i64, i64 } { ptr @prototype, i32 2, i64 0, i64 12867 }, section "llvm.ptrauth"
-
 define ptr @f(ptr %buffer, i32 %n) {
 entry:
-  %id = call token @llvm.coro.id.retcon(i32 8, i32 4, ptr %buffer, ptr @prototype.signed, ptr @allocate, ptr @deallocate)
+  %id = call token @llvm.coro.id.retcon(i32 8, i32 4, ptr %buffer, ptr ptrauth (ptr @prototype, i32 2, ptr null, i64 12867), ptr @allocate, ptr @deallocate)
   %hdl = call ptr @llvm.coro.begin(token %id, ptr null)
   br label %loop
 
@@ -29,24 +27,20 @@ cleanup:
   unreachable
 }
 
-; CHECK:       @prototype.signed = private constant
-; CHECK:       [[GLOBAL:@.*]] = private constant { ptr, i32, i64, i64 } { ptr [[RESUME:@.*]], i32 2, i64 0, i64 12867 }, section "llvm.ptrauth"
-
 ; CHECK-LABEL: define ptr @f(ptr %buffer, i32 %n)
 ; CHECK-NEXT:  entry:
 ; CHECK-NEXT:    [[T1:%.*]] = getelementptr inbounds [[FRAME_T:%.*]], ptr %buffer, i32 0, i32 0
 ; CHECK-NEXT:    store i32 %n, ptr [[T1]]
 ; CHECK-NEXT:    call void @print(i32 %n)
-; CHECK-NEXT:    ret ptr [[GLOBAL]]
+; CHECK-NEXT:    ret ptr ptrauth (ptr [[RESUME:@.*]], i32 2, ptr null, i64 12867)
 
 ; CHECK:      define internal ptr [[RESUME]](ptr noalias noundef nonnull align 4 dereferenceable(8) %0, i1 zeroext %1) {
-; CHECK:         [[GLOBAL]]
-
-@g.prototype.signed = private constant { ptr, i32, i64, i64 } { ptr @prototype, i32 2, i64 1, i64 8723 }, section "llvm.ptrauth"
+; CHECK:         ptrauth (ptr [[RESUME]], i32 2, ptr null, i64 12867)
 
 define ptr @g(ptr %buffer, i32 %n) {
 entry:
-  %id = call token @llvm.coro.id.retcon(i32 8, i32 4, ptr %buffer, ptr @g.prototype.signed, ptr @allocate, ptr @deallocate)
+
+  %id = call token @llvm.coro.id.retcon(i32 8, i32 4, ptr %buffer, ptr ptrauth (ptr @prototype, i32 2, ptr inttoptr(i64 1 to ptr), i64 8723), ptr @allocate, ptr @deallocate)
   %hdl = call ptr @llvm.coro.begin(token %id, ptr null)
   br label %loop
 

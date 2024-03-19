@@ -124,7 +124,7 @@ struct LLVM_LIBRARY_VISIBILITY Shape {
   };
 
   struct RetconLoweringStorage {
-    const Constant *ResumePtrAuthInfo;
+    Constant *ResumePtrAuthInfo;
     Function *ResumePrototype;
     Function *Alloc;
     Function *Dealloc;
@@ -181,15 +181,15 @@ struct LLVM_LIBRARY_VISIBILITY Shape {
     return ConstantInt::get(getIndexType(), Value);
   }
 
-  std::optional<GlobalPtrAuthInfo> getResumePtrAuthInfo() const {
+  ConstantPtrAuth *getResumePtrAuthInfo() const {
     switch (ABI) {
     case coro::ABI::Switch:
     case coro::ABI::Async:
-      return std::nullopt;
+      return nullptr;
     case coro::ABI::Retcon:
     case coro::ABI::RetconOnce:
-      if (!RetconLowering.ResumePtrAuthInfo) return std::nullopt;
-      return GlobalPtrAuthInfo::analyze(RetconLowering.ResumePtrAuthInfo);
+      if (!RetconLowering.ResumePtrAuthInfo) return nullptr;
+      return dyn_cast<ConstantPtrAuth>(RetconLowering.ResumePtrAuthInfo);
     }
   }
 

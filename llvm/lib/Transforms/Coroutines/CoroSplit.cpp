@@ -1916,20 +1916,21 @@ static void splitAsyncCoroutine(Function &F, coro::Shape &Shape,
 /// is provided, and this schema uses address discrimination, use that
 /// address instead of the stored address discriminator.
 static Value *emitSignedPointer(IRBuilder<> &Builder,
-                                const GlobalPtrAuthInfo &Schema,
+                                ConstantPtrAuth *Schema,
                                 Constant *ConstPointer,
                                 Value *Address) {
   auto Module = Builder.GetInsertBlock()->getModule();
-  if (!Schema.hasAddressDiversity()) {
-    return Schema.createWithSameSchema(*Module, ConstPointer);
+  if (!Schema->hasAddressDiversity()) {
+    return Schema->getWithSameSchema(ConstPointer);
   }
 
-  auto IntPtrTy = Schema.getAddrDiscriminator()->getType();
+  auto IntPtrTy = Schema->getDiscriminator()->getType();
 
   // Blend the provided address with the extra discriminator if the extra
   // discriminator is non-zero.
   Value *Discriminator = Builder.CreatePtrToInt(Address, IntPtrTy);
-  auto ExtraDiscriminator = const_cast<ConstantInt*>(Schema.getDiscriminator());
+  auto ExtraDiscriminator =
+      const_cast<ConstantInt *>(Schema->getDiscriminator());
   if (!ExtraDiscriminator->isNullValue()) {
     auto Blend = Intrinsic::getDeclaration(Module, Intrinsic::ptrauth_blend);
     Discriminator =
@@ -1943,7 +1944,7 @@ static Value *emitSignedPointer(IRBuilder<> &Builder,
 
   // call i64 @llvm.ptrauth.sign.i64(i64 %pointer, i32 %key, i64 %discriminator)
   auto Sign = Intrinsic::getDeclaration(Module, Intrinsic::ptrauth_sign);
-  auto Key = const_cast<ConstantInt*>(Schema.getKey());
+  auto Key = const_cast<ConstantInt*>(Schema->getKey());
   Pointer = Builder.CreateCall(Sign, { Pointer, Key, Discriminator });
 
   // Convert back to the original pointer type.
@@ -2067,10 +2068,10 @@ static void splitRetconCoroutine(Function &F, coro::Shape &Shape,
     if (auto PtrAuthInfo = Shape.getResumePtrAuthInfo()) {
       assert(!PtrAuthInfo->hasAddressDiversity() ||
              PtrAuthInfo->hasSpecialAddressDiscriminator(
-               GlobalPtrAuthInfo::AddrDiscriminator_UseCoroStorage));
+               ConstantPtrAuth::AddrDiscriminator_UseCoroStorage));
       IRBuilder<> Builder(Branch);
       ContinuationValue =
-        emitSignedPointer(Builder, *PtrAuthInfo, Continuation,
+        emitSignedPointer(Builder, PtrAuthInfo, Continuation,
                           Id->getStorage());
     }
 

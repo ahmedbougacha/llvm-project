@@ -1052,6 +1052,16 @@ public:
     return !getAddrDiscriminator()->isNullValue();
   }
 
+  /// A constant value for the address discriminator which has special
+  /// significance to coroutine lowering.
+  enum { AddrDiscriminator_UseCoroStorage = 1 };
+
+  /// Whether the address uses a special address discriminator.
+  /// These discriminators can't be used in real pointer-auth values; they
+  /// can only be used in "prototype" values that indicate how some real
+  /// schema is supposed to be produced.
+  bool hasSpecialAddressDiscriminator(uint64_t value) const;
+
   /// Check whether an authentication operation with key \p KeyV and (possibly
   /// blended) discriminator \p DiscriminatorV is compatible with this
   /// authenticated global reference.

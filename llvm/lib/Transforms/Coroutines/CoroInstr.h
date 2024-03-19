@@ -25,7 +25,7 @@
 #ifndef LLVM_LIB_TRANSFORMS_COROUTINES_COROINSTR_H
 #define LLVM_LIB_TRANSFORMS_COROUTINES_COROINSTR_H
 
-#include "llvm/IR/GlobalPtrAuthInfo.h"
+#include "llvm/IR/Constants.h"
 #include "llvm/IR/GlobalVariable.h"
 #include "llvm/IR/IntrinsicInst.h"
 #include "llvm/Support/raw_ostream.h"
@@ -256,15 +256,15 @@ public:
   /// are taken from this declaration.
   Function *getPrototype() const {
     Value *rawPrototype = getArgOperand(PrototypeArg)->stripPointerCasts();
-    if (auto global = GlobalPtrAuthInfo::analyze(rawPrototype)) {
+    if (auto CPA = dyn_cast<ConstantPtrAuth>(rawPrototype)) {
       rawPrototype =
-        const_cast<Constant*>(global->getPointer()->stripPointerCasts());
+        const_cast<Constant*>(CPA->getPointer()->stripPointerCasts());
     }
     return cast<Function>(rawPrototype);
   }
 
-  std::optional<GlobalPtrAuthInfo> getPtrAuthInfo() const {
-    return GlobalPtrAuthInfo::analyze(getArgOperand(PrototypeArg));
+  ConstantPtrAuth *getPtrAuthInfo() const {
+    return dyn_cast<ConstantPtrAuth>(getArgOperand(PrototypeArg));
   }
 
   /// Return the function to use for allocating memory.

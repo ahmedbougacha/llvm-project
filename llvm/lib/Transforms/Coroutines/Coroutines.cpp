@@ -340,7 +340,7 @@ void coro::Shape::buildFrom(Function &F) {
     auto Prototype = ContinuationId->getPrototype();
     this->RetconLowering.ResumePrototype = Prototype;
     auto AuthInfo = ContinuationId->getPtrAuthInfo();
-    this->RetconLowering.ResumePtrAuthInfo = (AuthInfo ? AuthInfo->getGV() : nullptr);
+    this->RetconLowering.ResumePtrAuthInfo = AuthInfo;
     this->RetconLowering.Alloc = ContinuationId->getAllocFunction();
     this->RetconLowering.Dealloc = ContinuationId->getDeallocFunction();
     this->RetconLowering.ReturnBlock = nullptr;
@@ -348,9 +348,9 @@ void coro::Shape::buildFrom(Function &F) {
 
     if (AuthInfo && AuthInfo->hasAddressDiversity() &&
         !AuthInfo->hasSpecialAddressDiscriminator(
-          GlobalPtrAuthInfo::AddrDiscriminator_UseCoroStorage)) {
+          ConstantPtrAuth::AddrDiscriminator_UseCoroStorage)) {
 #ifndef NDEBUG
-      AuthInfo->getGV()->dump();
+      AuthInfo->dump();
 #endif
       report_fatal_error("ptrauth-signed prototype must not have address "
                          "diversity");
@@ -526,7 +526,7 @@ void coro::Shape::emitDealloc(IRBuilder<> &Builder, Value *Ptr,
 /// Check that the given value is a well-formed prototype for the
 /// llvm.coro.id.retcon.* intrinsics.
 static void checkWFRetconPrototype(const AnyCoroIdRetconInst *I, Value *V) {
-  if (auto PtrAuth = GlobalPtrAuthInfo::analyze(V)) {
+  if (auto PtrAuth = dyn_cast<ConstantPtrAuth>(V)) {
     V = const_cast<Constant*>(PtrAuth->getPointer());
   }
   auto F = dyn_cast<Function>(V->stripPointerCasts());

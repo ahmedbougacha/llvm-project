@@ -2070,6 +2070,18 @@ bool ConstantPtrAuth::isCompatibleWith(const Value *Key,
   return false;
 }
 
+bool ConstantPtrAuth::hasSpecialAddressDiscriminator(uint64_t value) const {
+  auto *CastV = dyn_cast<ConstantExpr>(getAddrDiscriminator());
+  if (!CastV || CastV->getOpcode() != Instruction::IntToPtr)
+    return false;
+
+  auto IntVal = dyn_cast<ConstantInt>(CastV->getOperand(0));
+  if (!IntVal)
+    return false;
+
+  return IntVal->getValue() == value;
+}
+
 ConstantPtrAuth *ConstantPtrAuth::getWithSameSchema(Constant *Pointer) const {
   return get(Pointer, getKey(), getAddrDiscriminator(), getDiscriminator());
 }
