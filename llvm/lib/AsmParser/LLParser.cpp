@@ -5298,7 +5298,8 @@ bool LLParser::parseDIStringType(MDNode *&Result, bool IsDistinct) {
 ///                      dwarfAddressSpace: 3, ptrAuthKey: 1,
 ///                      ptrAuthIsAddressDiscriminated: true,
 ///                      ptrAuthExtraDiscriminator: 0x1234,
-///                      ptrAuthIsaPointer: 1, ptrAuthAuthenticatesNullValues:1
+///                      ptrAuthIsaPointer: 1, ptrAuthAuthenticatesNullValues:1,
+///                      ptrAuthAuthenticationMode: 0x1234
 ///                      )
 bool LLParser::parseDIDerivedType(MDNode *&Result, bool IsDistinct) {
 #define VISIT_MD_FIELDS(OPTIONAL, REQUIRED)                                    \
@@ -5319,7 +5320,8 @@ bool LLParser::parseDIDerivedType(MDNode *&Result, bool IsDistinct) {
   OPTIONAL(ptrAuthIsAddressDiscriminated, MDBoolField, );                      \
   OPTIONAL(ptrAuthExtraDiscriminator, MDUnsignedField, (0, 0xffff));           \
   OPTIONAL(ptrAuthIsaPointer, MDBoolField, );                                  \
-  OPTIONAL(ptrAuthAuthenticatesNullValues, MDBoolField, );
+  OPTIONAL(ptrAuthAuthenticatesNullValues, MDBoolField, );                     \
+  OPTIONAL(ptrAuthAuthenticationMode, MDUnsignedField, (3, 3));
   PARSE_MD_FIELDS();
 #undef VISIT_MD_FIELDS
 
@@ -5331,7 +5333,7 @@ bool LLParser::parseDIDerivedType(MDNode *&Result, bool IsDistinct) {
     PtrAuthData.emplace(
         (unsigned)ptrAuthKey.Val, ptrAuthIsAddressDiscriminated.Val,
         (unsigned)ptrAuthExtraDiscriminator.Val, ptrAuthIsaPointer.Val,
-        ptrAuthAuthenticatesNullValues.Val);
+        ptrAuthAuthenticatesNullValues.Val, ptrAuthAuthenticationMode.Val);
 
   Result = GET_OR_DISTINCT(DIDerivedType,
                            (Context, tag.Val, name.Val, file.Val, line.Val,
