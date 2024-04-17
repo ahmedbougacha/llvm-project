@@ -2220,6 +2220,11 @@ static void writeDIDerivedType(raw_ostream &Out, const DIDerivedType *N,
     Printer.printBool("ptrAuthIsaPointer", PtrAuthData->isaPointer());
     Printer.printBool("ptrAuthAuthenticatesNullValues",
                       PtrAuthData->authenticatesNullValues());
+    if (PtrAuthData->authenticationMode() != 3) {
+      // Display non-default options
+      Printer.printInt("ptrAuthAuthenticationMode",
+                       PtrAuthData->authenticationMode());
+    }
   }
   Out << ")";
 }
