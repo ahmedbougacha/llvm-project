@@ -276,7 +276,8 @@ namespace llvm {
                                               bool IsAddressDiscriminated,
                                               unsigned ExtraDiscriminator,
                                               bool IsaPointer,
-                                              bool authenticatesNullValues);
+                                              bool AuthenticatesNullValues,
+                                              unsigned AuthenticationMode);
 
     /// Create debugging information entry for a pointer to member.
     /// \param PointeeTy Type pointed to by this pointer.
