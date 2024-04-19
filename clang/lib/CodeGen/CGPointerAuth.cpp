@@ -642,12 +642,16 @@ CodeGenModule::computeVTPointerAuthentication(const CXXRecordDecl *thisClass) {
       return std::nullopt;
     }
     if (explicitKey != VTablePointerAuthenticationAttr::DefaultKey) {
-      if (explicitKey == VTablePointerAuthenticationAttr::ProcessIndependent)
-        key = (unsigned)PointerAuthSchema::ARM8_3Key::ASDA;
-      else {
-        assert(explicitKey ==
-               VTablePointerAuthenticationAttr::ProcessDependent);
-        key = (unsigned)PointerAuthSchema::ARM8_3Key::ASDB;
+      if (Context.getLangOpts().SoftPointerAuth) {
+        key = (unsigned)PointerAuthSchema::SoftKey::CXXVirtualFunctionPointers;
+      } else {
+        if (explicitKey == VTablePointerAuthenticationAttr::ProcessIndependent)
+          key = (unsigned)PointerAuthSchema::ARM8_3Key::ASDA;
+        else {
+          assert(explicitKey ==
+                 VTablePointerAuthenticationAttr::ProcessDependent);
+          key = (unsigned)PointerAuthSchema::ARM8_3Key::ASDB;
+        }
       }
     }
 

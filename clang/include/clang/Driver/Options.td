@@ -4193,6 +4193,14 @@ defm ptrauth_block_descriptor_pointers : OptInCC1FFlag<"ptrauth-block-descriptor
 }
 
 let Group = f_Group in {
+  let Visibility = [ClangOption,CC1Option] in {
+    def fptrauth_soft : Flag<["-"], "fptrauth-soft">,
+      HelpText<"Enable software lowering of pointer authentication">;
+  }
+  def fno_ptrauth_soft : Flag<["-"], "fno-ptrauth-soft">;
+}
+
+let Group = f_Group in {
   def fptrauth_abi_version_EQ : Joined<["-"], "fptrauth-abi-version=">,
     Visibility<[ClangOption, CC1Option, CC1AsOption]>,
     HelpText<"Pointer Authentication ABI version">;
