@@ -10,14 +10,12 @@ _Static_assert(!__has_feature(ptrauth_objc_isa_masking), "wat");
 @class NSString;
 NSString *aString = @"foo";
 
-// CHECK-SIGN-AND-AUTH: @__CFConstantStringClassReference.ptrauth = private constant { ptr, i32, i64, i64 } { ptr @__CFConstantStringClassReference, i32 2, i64 ptrtoint (ptr @_unnamed_cfstring_ to i64), i64 27361 }, section "llvm.ptrauth"
 // CHECK-SIGN-AND-AUTH: @.str = private unnamed_addr constant [4 x i8] c"foo\00", section "__TEXT,__cstring,cstring_literals"
-// CHECK-SIGN-AND-AUTH: @_unnamed_cfstring_ = private global %struct.__NSConstantString_tag { ptr @__CFConstantStringClassReference.ptrauth, i32 1992, ptr @.str, i64 3 }, section "__DATA,__cfstring"
+// CHECK-SIGN-AND-AUTH: @_unnamed_cfstring_ = private global %struct.__NSConstantString_tag { ptr ptrauth (ptr @__CFConstantStringClassReference, i32 2, ptr @_unnamed_cfstring_, i64 27361), i32 1992, ptr @.str, i64 3 }, section "__DATA,__cfstring"
 // CHECK-SIGN-AND-AUTH: @aString = global ptr @_unnamed_cfstring_
 
-// CHECK-SIGN-AND-STRIP: @__CFConstantStringClassReference.ptrauth = private constant { ptr, i32, i64, i64 } { ptr @__CFConstantStringClassReference, i32 2, i64 ptrtoint (ptr @_unnamed_cfstring_ to i64), i64 27361 }, section "llvm.ptrauth"
 // CHECK-SIGN-AND-STRIP: @.str = private unnamed_addr constant [4 x i8] c"foo\00", section "__TEXT,__cstring,cstring_literals"
-// CHECK-SIGN-AND-STRIP: @_unnamed_cfstring_ =  private global %struct.__NSConstantString_tag { ptr @__CFConstantStringClassReference.ptrauth, i32 1992, ptr @.str, i64 3 }, section "__DATA,__cfstring"
+// CHECK-SIGN-AND-STRIP: @_unnamed_cfstring_ =  private global %struct.__NSConstantString_tag { ptr ptrauth (ptr @__CFConstantStringClassReference, i32 2, ptr @_unnamed_cfstring_, i64 27361), i32 1992, ptr @.str, i64 3 }, section "__DATA,__cfstring"
 // CHECK-SIGN-AND-STRIP: @aString = global ptr @_unnamed_cfstring_
 
 // CHECK-STRIP: @.str = private unnamed_addr constant [4 x i8] c"foo\00", section "__TEXT,__cstring,cstring_literals", align 1

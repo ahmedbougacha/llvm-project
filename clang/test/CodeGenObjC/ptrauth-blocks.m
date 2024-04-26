@@ -2,14 +2,12 @@
 // RUN: %clang_cc1 -fptrauth-calls -fptrauth-objc-isa-mode=sign-and-auth  -fobjc-arc -fblocks -fobjc-runtime=ios-7 -triple arm64-apple-ios -emit-llvm %s  -o - | FileCheck %s
 
 void (^blockptr)(void);
-// CHECK: @_NSConcreteGlobalBlock.ptrauth = private constant { ptr, i32, i64, i64 } { ptr @_NSConcreteGlobalBlock, i32 2, i64 ptrtoint (ptr [[GLOBAL_BLOCK_1:@.*]] to i64), i64 27361 }, section "llvm.ptrauth", align 8
-// CHECK: [[INVOCATION_1:@.*]] =  private constant { ptr, i32, i64, i64 } { ptr {{@.*}}, i32 0, i64 ptrtoint (ptr getelementptr inbounds ({ ptr, i32, i32, ptr, ptr }, ptr [[GLOBAL_BLOCK_1]], i32 0, i32 3) to i64), i64 0 }, section "llvm.ptrauth"
-// CHECK: [[GLOBAL_BLOCK_1]] = internal constant { ptr, i32, i32, ptr, ptr } { ptr @_NSConcreteGlobalBlock.ptrauth, i32 1342177280, i32 0, ptr [[INVOCATION_1]],
+
+
+// CHECK: [[GLOBAL_BLOCK_1:@.*]] = internal constant { ptr, i32, i32, ptr, ptr } { ptr ptrauth (ptr @_NSConcreteGlobalBlock, i32 2, ptr [[GLOBAL_BLOCK_1]], i64 27361), i32 1342177280, i32 0, ptr ptrauth (ptr {{@.*}}, i32 0, ptr getelementptr inbounds ({ ptr, i32, i32, ptr, ptr }, ptr [[GLOBAL_BLOCK_1]], i32 0, i32 3), i64 0),
 void (^globalblock)(void) = ^{};
 
-// CHECK: [[COPYDISPOSE_COPY:@.*]] = private constant { ptr, i32, i64, i64 } { ptr {{@.*}}, i32 0, i64 ptrtoint (ptr getelementptr inbounds ({ i64, i64, ptr, ptr, ptr, i64 }, ptr [[COPYDISPOSE_DESCRIPTOR:@.*]], i32 0, i32 2) to i64), i64 0 }, section "llvm.ptrauth"
-// CHECK: [[COPYDISPOSE_DISPOSE:@.*]] = private constant { ptr, i32, i64, i64 } { ptr {{@.*}}, i32 0, i64 ptrtoint (ptr getelementptr inbounds ({ i64, i64, ptr, ptr, ptr, i64 }, ptr [[COPYDISPOSE_DESCRIPTOR]], i32 0, i32 3) to i64), i64 0 }, section "llvm.ptrauth"
-// CHECK: [[COPYDISPOSE_DESCRIPTOR:@.*]] = linkonce_odr hidden unnamed_addr constant { i64, i64, ptr, ptr, ptr, i64 } { i64 0, i64 40, ptr [[COPYDISPOSE_COPY]], ptr [[COPYDISPOSE_DISPOSE]],
+// CHECK: [[COPYDISPOSE_DESCRIPTOR:@.*]] = linkonce_odr hidden unnamed_addr constant { i64, i64, ptr, ptr, ptr, i64 } { i64 0, i64 40, ptr ptrauth (ptr {{@.*}}, i32 0, ptr getelementptr inbounds ({ i64, i64, ptr, ptr, ptr, i64 }, ptr [[COPYDISPOSE_DESCRIPTOR]], i32 0, i32 2), i64 0), ptr ptrauth (ptr {{@.*}}, i32 0, ptr getelementptr inbounds ({ i64, i64, ptr, ptr, ptr, i64 }, ptr [[COPYDISPOSE_DESCRIPTOR]], i32 0, i32 3), i64 0),
 
 @interface A
 - (int) count;

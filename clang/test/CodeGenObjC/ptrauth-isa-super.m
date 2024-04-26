@@ -17,17 +17,13 @@
 // CHECK: @OBJC_CLASS_NAME_ = private unnamed_addr constant [2 x i8] c"C\00", section "__TEXT,__objc_classname,cstring_literals", align 1
 // CHECK: @OBJC_METH_VAR_NAME_.1 = private unnamed_addr constant [11 x i8] c"super_test\00", section "__TEXT,__objc_methname,cstring_literals", align 1
 // CHECK: @OBJC_METH_VAR_TYPE_ = private unnamed_addr constant [8 x i8] c"v16@0:8\00", section "__TEXT,__objc_methtype,cstring_literals", align 1
-// CHECK: @"\01+[C super_test].ptrauth" = private constant { ptr, i32, i64, i64 } { ptr @"\01+[C super_test]", i32 0, i64 ptrtoint (ptr getelementptr inbounds ({ i32, i32, [1 x %struct._objc_method] }, ptr @"_OBJC_$_CLASS_METHODS_C", i32 0, i32 2, i32 0, i32 2) to i64), i64 0 }, section "llvm.ptrauth", align 8
-// CHECK: @"_OBJC_$_CLASS_METHODS_C" = internal global { i32, i32, [1 x %struct._objc_method] } { i32 24, i32 1, [1 x %struct._objc_method] [%struct._objc_method { ptr @OBJC_METH_VAR_NAME_.1, ptr @OBJC_METH_VAR_TYPE_, ptr @"\01+[C super_test].ptrauth" }] }, section "__DATA, __objc_const", align 8
-// CHECK: @"_OBJC_$_CLASS_METHODS_C.ptrauth" = private constant { ptr, i32, i64, i64 } { ptr @"_OBJC_$_CLASS_METHODS_C", i32 2, i64 ptrtoint (ptr getelementptr inbounds (%struct._class_ro_t, ptr @"_OBJC_METACLASS_RO_$_C", i32 0, i32 5) to i64), i64 49936 }, section "llvm.ptrauth", align 8
-// CHECK: @"_OBJC_METACLASS_RO_$_C" = internal global %struct._class_ro_t { i32 129, i32 40, i32 40, ptr null, ptr @OBJC_CLASS_NAME_, ptr @"_OBJC_$_CLASS_METHODS_C.ptrauth", ptr null, ptr null, ptr null, ptr null }, section "__DATA, __objc_const", align 8
-// CHECK: @"OBJC_METACLASS_$_Base.ptrauth" = private constant { ptr, i32, i64, i64 } { ptr @"OBJC_METACLASS_$_Base", i32 2, i64 ptrtoint (ptr @"OBJC_METACLASS_$_C" to i64), i64 27361 }, section "llvm.ptrauth", align 8
-// CHECK: @"OBJC_METACLASS_$_Base.ptrauth.2" = private constant { ptr, i32, i64, i64 } { ptr @"OBJC_METACLASS_$_Base", i32 2, i64 ptrtoint (ptr getelementptr inbounds (%struct._class_t, ptr @"OBJC_METACLASS_$_C", i32 0, i32 1) to i64), i64 46507 }, section "llvm.ptrauth", align 8
+
+// CHECK: @"_OBJC_$_CLASS_METHODS_C" = internal global { i32, i32, [1 x %struct._objc_method] } { i32 24, i32 1, [1 x %struct._objc_method] [%struct._objc_method { ptr @OBJC_METH_VAR_NAME_.1, ptr @OBJC_METH_VAR_TYPE_, ptr ptrauth (ptr @"\01+[C super_test]", i32 0, ptr getelementptr inbounds ({ i32, i32, [1 x %struct._objc_method] }, ptr @"_OBJC_$_CLASS_METHODS_C", i32 0, i32 2, i32 0, i32 2), i64 0) }] }, section "__DATA, __objc_const", align 8
+
+// CHECK: @"_OBJC_METACLASS_RO_$_C" = internal global %struct._class_ro_t { i32 129, i32 40, i32 40, ptr null, ptr @OBJC_CLASS_NAME_, ptr ptrauth (ptr @"_OBJC_$_CLASS_METHODS_C", i32 2, ptr getelementptr inbounds (%struct._class_ro_t, ptr @"_OBJC_METACLASS_RO_$_C", i32 0, i32 5), i64 49936), ptr null, ptr null, ptr null, ptr null }, section "__DATA, __objc_const", align 8
 // CHECK: @"OBJC_CLASS_$_Base" = external global %struct._class_t
 // CHECK: @"_OBJC_CLASS_RO_$_C" = internal global %struct._class_ro_t { i32 128, i32 0, i32 0, ptr null, ptr @OBJC_CLASS_NAME_, ptr null, ptr null, ptr null, ptr null, ptr null }, section "__DATA, __objc_const", align 8
-// CHECK: @"OBJC_METACLASS_$_C.ptrauth" = private constant { ptr, i32, i64, i64 } { ptr @"OBJC_METACLASS_$_C", i32 2, i64 ptrtoint (ptr @"OBJC_CLASS_$_C" to i64), i64 27361 }, section "llvm.ptrauth", align 8
-// CHECK: @"OBJC_CLASS_$_Base.ptrauth" = private constant { ptr, i32, i64, i64 } { ptr @"OBJC_CLASS_$_Base", i32 2, i64 ptrtoint (ptr getelementptr inbounds (%struct._class_t, ptr @"OBJC_CLASS_$_C", i32 0, i32 1) to i64), i64 46507 }, section "llvm.ptrauth", align 8
-// CHECK: @"OBJC_CLASS_$_C" = global %struct._class_t { ptr @"OBJC_METACLASS_$_C.ptrauth", ptr @"OBJC_CLASS_$_Base.ptrauth", ptr @_objc_empty_cache, ptr null, ptr @"_OBJC_CLASS_RO_$_C" }, section "__DATA, __objc_data", align 8
+// CHECK: @"OBJC_CLASS_$_C" = global %struct._class_t { ptr ptrauth (ptr @"OBJC_METACLASS_$_C", i32 2, ptr @"OBJC_CLASS_$_C", i64 27361), ptr ptrauth (ptr @"OBJC_CLASS_$_Base", i32 2, ptr getelementptr inbounds (%struct._class_t, ptr @"OBJC_CLASS_$_C", i32 0, i32 1), i64 46507), ptr @_objc_empty_cache, ptr null, ptr @"_OBJC_CLASS_RO_$_C" }, section "__DATA, __objc_data", align 8
 
 @interface Base
 + (void)test;
