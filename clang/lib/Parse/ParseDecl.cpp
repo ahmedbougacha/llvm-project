@@ -3282,6 +3282,41 @@ void Parser::ParseAlignmentSpecifier(ParsedAttributes &Attrs,
   }
 }
 
+/// type-qualifier:
+///    ('__ptrauth' | '__ptrauth_restricted_intptr') '(' constant-expression
+///                    (',' constant-expression)[opt]
+///                    (',' constant-expression)[opt] ')'
+void Parser::ParsePtrauthQualifier(ParsedAttributes &attrs) {
+  assert(Tok.is(tok::kw___ptrauth) ||
+         Tok.is(tok::kw___ptrauth_restricted_intptr));
+
+  IdentifierInfo *kwName = Tok.getIdentifierInfo();
+  SourceLocation kwLoc = ConsumeToken();
+
+  BalancedDelimiterTracker T(*this, tok::l_paren);
+  if (T.expectAndConsume())
+    return;
+
+  ArgsVector argExprs;
+  do {
+    ExprResult expr = ParseAssignmentExpression();
+    if (expr.isInvalid()) {
+      T.skipToEnd();
+      return;
+    }
+    argExprs.push_back(expr.get());
+  } while (TryConsumeToken(tok::comma));
+
+  T.consumeClose();
+  SourceLocation endLoc = T.getCloseLocation();
+
+  attrs.addNew(kwName, SourceRange(kwLoc, endLoc),
+               /*scope*/ nullptr, SourceLocation(), argExprs.data(),
+               argExprs.size(),
+               ParsedAttr::Form::Keyword(/*IsAlignAs=*/false,
+                                         /*IsRegularKeywordAttribute=*/false));
+}
+
 /// Bounds attributes (e.g., counted_by):
 ///   AttrName '(' expression ')'
 void Parser::ParseBoundsAttribute(IdentifierInfo &AttrName,
@@ -4141,6 +4176,12 @@ void Parser::ParseDeclarationSpecifiers(
       isInvalid = DS.SetTypeQual(DeclSpec::TQ_unaligned, Loc, PrevSpec, DiagID,
                                  getLangOpts());
       break;
+
+    // __ptrauth qualifier.
+    case tok::kw___ptrauth:
+    case tok::kw___ptrauth_restricted_intptr:
+      ParsePtrauthQualifier(DS.getAttributes());
+      continue;
 
     case tok::kw___sptr:
     case tok::kw___uptr:
@@ -5758,6 +5799,8 @@ bool Parser::isTypeSpecifierQualifier() {
   case tok::kw___ptr32:
   case tok::kw___pascal:
   case tok::kw___unaligned:
+  case tok::kw___ptrauth:
+  case tok::kw___ptrauth_restricted_intptr:
 
   case tok::kw__Nonnull:
   case tok::kw__Nullable:
@@ -6047,6 +6090,8 @@ bool Parser::isDeclarationSpecifier(
   case tok::kw___forceinline:
   case tok::kw___pascal:
   case tok::kw___unaligned:
+  case tok::kw___ptrauth:
+  case tok::kw___ptrauth_restricted_intptr:
 
   case tok::kw__Nonnull:
   case tok::kw__Nullable:
@@ -6307,6 +6352,13 @@ void Parser::ParseTypeQualifierListOpt(
     case tok::kw_out:
       // NOTE: ParseHLSLQualifiers will consume the qualifier token.
       ParseHLSLQualifiers(DS.getAttributes());
+      continue;
+
+    // __ptrauth qualifier.
+    case tok::kw___ptrauth:
+    case tok::kw___ptrauth_restricted_intptr:
+      ParsePtrauthQualifier(DS.getAttributes());
+      EndLoc = PrevTokLocation;
       continue;
 
     case tok::kw___unaligned:

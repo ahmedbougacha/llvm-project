@@ -1772,6 +1772,44 @@ llvm::Constant *ConstantEmitter::tryEmitPrivateForMemory(const APValue &value,
   return (C ? emitForMemory(C, destType) : nullptr);
 }
 
+/// Try to emit a constant signed pointer, given a raw pointer and the
+/// destination ptrauth qualifier.
+///
+/// This can fail if the qualifier needs address discrimination and the
+/// emitter is in an abstract mode.
+llvm::Constant *
+ConstantEmitter::tryEmitConstantSignedPointer(llvm::Constant *unsignedPointer,
+                                              PointerAuthQualifier schema) {
+  assert(schema && "applying trivial ptrauth schema");
+
+  if (schema.hasKeyNone())
+    return unsignedPointer;
+
+  auto key = schema.getKey();
+
+  // Create an address placeholder if we're using address discrimination.
+  llvm::GlobalValue *storageAddress = nullptr;
+  if (schema.isAddressDiscriminated()) {
+    // We can't do this if the emitter is in an abstract state.
+    if (isAbstract())
+      return nullptr;
+
+    storageAddress = getCurrentAddrPrivate();
+  }
+
+  // Fetch the extra discriminator.
+  llvm::Constant *otherDiscriminator =
+      llvm::ConstantInt::get(CGM.IntPtrTy, schema.getExtraDiscriminator());
+
+  auto signedPointer = CGM.getConstantSignedPointer(
+      unsignedPointer, key, storageAddress, otherDiscriminator);
+
+  if (schema.isAddressDiscriminated())
+    registerCurrentAddrPrivate(signedPointer, storageAddress);
+
+  return signedPointer;
+}
+
 llvm::Constant *ConstantEmitter::emitForMemory(CodeGenModule &CGM,
                                                llvm::Constant *C,
                                                QualType destType) {
@@ -1810,6 +1848,11 @@ llvm::Constant *ConstantEmitter::tryEmitPrivate(const Expr *E,
                                                 QualType destType) {
   assert(!destType->isVoidType() && "can't emit a void constant");
 
+  // We don't yet support constant initializers for values with authenticated
+  // null values.
+  if (CGM.getContext().typeContainsAuthenticatedNull(destType))
+    return nullptr;
+
   if (!destType->isReferenceType())
     if (llvm::Constant *C = ConstExprEmitter(*this).Visit(E, destType))
       return C;
@@ -1839,10 +1882,13 @@ namespace {
 struct ConstantLValue {
   llvm::Constant *Value;
   bool HasOffsetApplied;
+  bool HasDestPointerAuth;
 
   /*implicit*/ ConstantLValue(llvm::Constant *value,
-                              bool hasOffsetApplied = false)
-    : Value(value), HasOffsetApplied(hasOffsetApplied) {}
+                              bool hasOffsetApplied = false,
+                              bool hasDestPointerAuth = false)
+    : Value(value), HasOffsetApplied(hasOffsetApplied),
+      HasDestPointerAuth(hasDestPointerAuth) {}
 
   /*implicit*/ ConstantLValue(ConstantAddress address)
     : ConstantLValue(address.getPointer()) {}
@@ -1912,6 +1958,12 @@ private:
 
 }
 
+static bool shouldSignPointer(const PointerAuthQualifier &qualifier) {
+  auto authenticationMode = qualifier.getAuthenticationMode();
+  return authenticationMode == PointerAuthenticationMode::SignAndStrip ||
+	authenticationMode == PointerAuthenticationMode::SignAndAuth;
+}
+
 llvm::Constant *ConstantLValueEmitter::tryEmit() {
   const APValue::LValueBase &base = Value.getLValueBase();
 
@@ -1928,6 +1980,9 @@ llvm::Constant *ConstantLValueEmitter::tryEmit() {
   // If there's no base at all, this is a null or absolute pointer,
   // possibly cast back to an integer type.
   if (!base) {
+    if (DestType.getPointerAuth().withoutKeyNone() &&
+        DestType.getPointerAuth().authenticatesNullValues())
+      return nullptr;
     return tryEmitAbsolute(destTy);
   }
 
@@ -1941,6 +1996,14 @@ llvm::Constant *ConstantLValueEmitter::tryEmit() {
   // Apply the offset if necessary and not already done.
   if (!result.HasOffsetApplied) {
     value = applyOffset(value);
+  }
+
+  // Apply pointer-auth signing from the destination type.
+  if (auto pointerAuth = DestType.getPointerAuth()) {
+    if (!result.HasDestPointerAuth && shouldSignPointer(pointerAuth)) {
+      value = Emitter.tryEmitConstantSignedPointer(value, pointerAuth);
+      if (!value) return nullptr;
+    }
   }
 
   // Convert to the appropriate type; this could be an lvalue for
@@ -1986,6 +2049,12 @@ ConstantLValueEmitter::tryEmitBase(const APValue::LValueBase &base) {
       return CGM.GetWeakRefReference(D).getPointer();
 
     auto PtrAuthSign = [&](llvm::Constant *C, bool IsFunction) {
+      if (auto pointerAuth = DestType.getPointerAuth()) {
+        C = applyOffset(C);
+        C = Emitter.tryEmitConstantSignedPointer(C, pointerAuth);
+        return ConstantLValue(C, /*applied offset*/ true, /*signed*/ true);
+      }
+
       CGPointerAuthInfo AuthInfo;
 
       if (IsFunction)
@@ -2010,7 +2079,7 @@ ConstantLValueEmitter::tryEmitBase(const APValue::LValueBase &base) {
         C = CGM.getConstantSignedPointer(
             C, AuthInfo.getKey(), nullptr,
             cast_or_null<llvm::Constant>(AuthInfo.getDiscriminator()));
-        return ConstantLValue(C, /*applied offset*/ true);
+        return ConstantLValue(C, /*applied offset*/ true, /*signed*/ true);
       }
 
       return ConstantLValue(C);
@@ -2023,11 +2092,12 @@ ConstantLValueEmitter::tryEmitBase(const APValue::LValueBase &base) {
       // We can never refer to a variable with local storage.
       if (!VD->hasLocalStorage()) {
         if (VD->isFileVarDecl() || VD->hasExternalStorage())
-          return CGM.GetAddrOfGlobalVar(VD);
+          return PtrAuthSign(CGM.GetAddrOfGlobalVar(VD), false);
 
         if (VD->isLocalVarDecl()) {
-          return CGM.getOrCreateStaticVarDecl(
+          llvm::Constant *C = CGM.getOrCreateStaticVarDecl(
               *VD, CGM.getLLVMLinkageVarDefinition(VD));
+          return PtrAuthSign(C, false);
         }
       }
     }
@@ -2227,6 +2297,9 @@ llvm::Constant *ConstantEmitter::tryEmitPrivate(const APValue &Value,
   case APValue::LValue:
     return ConstantLValueEmitter(*this, Value, DestType).tryEmit();
   case APValue::Int:
+    if (DestType.getPointerAuth().withoutKeyNone() && Value.getInt() != 0) {
+      return nullptr;
+    }
     return llvm::ConstantInt::get(CGM.getLLVMContext(), Value.getInt());
   case APValue::FixedPoint:
     return llvm::ConstantInt::get(CGM.getLLVMContext(),

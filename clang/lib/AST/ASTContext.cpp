@@ -3356,6 +3356,62 @@ uint16_t ASTContext::getPointerAuthTypeDiscriminator(QualType T) {
   return getPointerAuthStringDiscriminator(*this, Str.c_str());
 }
 
+bool ASTContext::typeContainsAuthenticatedNull(const Type *type) const {
+  return typeContainsAuthenticatedNull(QualType(type, 0));
+}
+std::optional<bool>
+ASTContext::tryTypeContainsAuthenticatedNull(QualType type) const {
+  if (!LangOpts.PointerAuthIntrinsics)
+    return false;
+
+  auto existing = containsAuthenticatedNullTypes.find(type);
+  if (existing != containsAuthenticatedNullTypes.end())
+    return existing->second;
+  if (type->isPointerType() || type->isIntegerType()) {
+    auto auth = type.getPointerAuth().withoutKeyNone();
+    auto result = auth && auth.authenticatesNullValues();
+    containsAuthenticatedNullTypes[type] = result;
+    return result;
+  }
+  if (auto recordType = type->getAsRecordDecl()) {
+    if (!recordType->getDefinition() || recordType->isInvalidDecl())
+      return std::nullopt;
+    for (auto field : recordType->fields()) {
+      auto result = tryTypeContainsAuthenticatedNull(field->getType());
+      if (result && *result) {
+        containsAuthenticatedNullTypes[type] = true;
+        return true;
+      }
+      if (!result)
+        return std::nullopt;
+    }
+  }
+
+  if (auto cxxRecord = type->getAsCXXRecordDecl()) {
+    for (auto base : cxxRecord->bases()) {
+      auto result = tryTypeContainsAuthenticatedNull(base.getType());
+      if (result && *result) {
+        containsAuthenticatedNullTypes[type] = true;
+        return true;
+      }
+      if (!result)
+        return std::nullopt;
+    }
+  }
+
+  if (auto arrayType = dyn_cast_or_null<ArrayType>(type.getTypePtr())) {
+    auto result = typeContainsAuthenticatedNull(arrayType->getElementType());
+    containsAuthenticatedNullTypes[type] = result;
+    return result;
+  }
+  containsAuthenticatedNullTypes[type] = false;
+  return false;
+}
+
+bool ASTContext::typeContainsAuthenticatedNull(QualType type) const {
+  return *tryTypeContainsAuthenticatedNull(type);
+}
+
 QualType ASTContext::getObjCGCQualType(QualType T,
                                        Qualifiers::GC GCAttr) const {
   QualType CanT = getCanonicalType(T);
@@ -7887,6 +7943,9 @@ bool ASTContext::BlockRequiresCopying(QualType Ty,
     return true;
   }
 
+  if (Ty.hasAddressDiscriminatedPointerAuth())
+    return true;
+
   // The block needs copy/destroy helpers if Ty is non-trivial to destructively
   // move or destroy.
   if (Ty.isNonTrivialToPrimitiveDestructiveMove() || Ty.isDestructedType())
@@ -10929,6 +10988,7 @@ QualType ASTContext::mergeTypes(QualType LHS, QualType RHS, bool OfBlockPointer,
     if (LQuals.getCVRQualifiers() != RQuals.getCVRQualifiers() ||
         LQuals.getAddressSpace() != RQuals.getAddressSpace() ||
         LQuals.getObjCLifetime() != RQuals.getObjCLifetime() ||
+        !LQuals.getPointerAuth().isEquivalent(RQuals.getPointerAuth()) ||
         LQuals.hasUnaligned() != RQuals.hasUnaligned())
       return {};
 

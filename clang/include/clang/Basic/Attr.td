@@ -3251,6 +3251,16 @@ def ObjCRequiresPropertyDefs : InheritableAttr {
   let SimpleHandler = 1;
 }
 
+def PointerAuth : TypeAttr {
+  let Spellings = [CustomKeyword<"__ptrauth">,
+                   CustomKeyword<"__ptrauth_restricted_intptr">];
+  let Args = [IntArgument<"Key">,
+              BoolArgument<"AddressDiscriminated", 1>,
+              IntArgument<"ExtraDiscriminator", 1>,
+              StringArgument<"AuthenticationMode", 1>];
+  let Documentation = [PtrAuthDocs];
+}
+
 def Unused : InheritableAttr {
   let Spellings = [CXX11<"", "maybe_unused", 201603>, GCC<"unused">,
                    C23<"", "maybe_unused", 202106>];

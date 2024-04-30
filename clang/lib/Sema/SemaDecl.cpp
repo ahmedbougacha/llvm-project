@@ -13463,6 +13463,12 @@ struct DiagNonTrivalCUnionCopyVisitor
         asDerived().visit(FD->getType(), FD, InNonTrivialUnion);
   }
 
+  void visitPtrAuth(QualType QT, const FieldDecl *FD, bool InNonTrivialUnion) {
+    if (InNonTrivialUnion)
+      S.Diag(FD->getLocation(), diag::note_non_trivial_c_union)
+          << 1 << 2 << QT << FD->getName();
+  }
+
   void preVisit(QualType::PrimitiveCopyKind PCK, QualType QT,
                 const FieldDecl *FD, bool InNonTrivialUnion) {}
   void visitTrivial(QualType QT, const FieldDecl *FD, bool InNonTrivialUnion) {}
@@ -14592,6 +14598,16 @@ void Sema::CheckCompleteVariableDeclaration(VarDecl *var) {
     Diag(var->getLocation(), diag::err_constexpr_var_requires_const_init)
         << var;
 
+  if (GlobalStorage) {
+    auto supported = Context.tryTypeContainsAuthenticatedNull(var->getType());
+    if (supported && *supported) {
+      Diag(var->getLocation(),
+           diag::err_ptrauth_invalid_authenticated_null_global)
+          << var->isFileVarDecl();
+      var->setInvalidDecl();
+    }
+  }
+
   // Check whether the initializer is sufficiently constant.
   if ((getLangOpts().CPlusPlus || (getLangOpts().C23 && var->isConstexpr())) &&
       !type->isDependentType() && Init && !Init->isValueDependent() &&
@@ -15422,6 +15438,13 @@ ParmVarDecl *Sema::CheckParameter(DeclContext *DC, SourceLocation StartLoc,
       << FixItHint::CreateInsertion(TypeEndLoc, "*");
     T = Context.getObjCObjectPointerType(T);
     New->setType(T);
+  }
+
+  // __ptrauth is forbidden on parameters.
+  if (T.getPointerAuth()) {
+    Diag(NameLoc, diag::err_ptrauth_qualifier_invalid)
+        << T << (int)!T->isSignablePointerType() << 1;
+    New->setInvalidDecl();
   }
 
   // ISO/IEC TR 18037 S6.7.3: "The type of an object with automatic storage
@@ -19562,9 +19585,15 @@ void Sema::ActOnFields(Scope *S, SourceLocation RecLoc, Decl *EnclosingDecl,
             RecordArgPassingKind::CanNeverPassInRegs)
           Record->setArgPassingRestrictions(
               RecordArgPassingKind::CanNeverPassInRegs);
-      } else if (FT.getQualifiers().getObjCLifetime() == Qualifiers::OCL_Weak)
+      } else if (FT.getQualifiers().getObjCLifetime() == Qualifiers::OCL_Weak) {
         Record->setArgPassingRestrictions(
             RecordArgPassingKind::CanNeverPassInRegs);
+      } else if (PointerAuthQualifier Q =
+                     FT.getPointerAuth().withoutKeyNone()) {
+        if (Q.isAddressDiscriminated())
+          Record->setArgPassingRestrictions(
+            RecordArgPassingKind::CanNeverPassInRegs);
+      }
     }
 
     if (Record && FD->getType().isVolatileQualified())
