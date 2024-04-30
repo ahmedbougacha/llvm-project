@@ -122,6 +122,14 @@ void has_ptrauth_init_fini() {}
 void no_ptrauth_init_fini() {}
 #endif
 
+#if __has_feature(ptrauth_qualifier)
+// INTRIN: has_ptrauth_qualifier
+void has_ptrauth_qualifier() {}
+#else
+// NOINTRIN: no_ptrauth_qualifier
+void no_ptrauth_qualifier() {}
+#endif
+
 #include <ptrauth.h>
 
 #if __has_feature(ptrauth_function_pointer_type_discrimination)
