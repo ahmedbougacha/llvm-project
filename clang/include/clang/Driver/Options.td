@@ -4388,6 +4388,8 @@ defm ptrauth_function_pointer_type_discrimination : OptInCC1FFlag<"ptrauth-funct
   "Enable type discrimination on C function pointers">;
 defm ptrauth_block_descriptor_pointers : OptInCC1FFlag<"ptrauth-block-descriptor-pointers",
   "Enable signing block descriptor pointers">;
+defm ptrauth_objc_isa_masking : OptInCC1FFlag<"ptrauth-objc-isa-masking",
+  "Enable pre- and post-authentication masking mode of Objective-c isa pointers">;
 defm ptrauth_indirect_gotos : OptInCC1FFlag<"ptrauth-indirect-gotos",
   "Enable signing and authentication of indirect goto targets">;
 defm ptrauth_init_fini : OptInCC1FFlag<"ptrauth-init-fini", "Enable signing of function pointers in init/fini arrays">;

@@ -175,6 +175,8 @@ LANGOPT(PointerAuthTypeInfoVTPtrDiscrimination, 1, 0, "incorporate type and addr
 BENIGN_LANGOPT(PointerAuthFunctionTypeDiscrimination, 1, 0,
                "Use type discrimination when signing function pointers")
 LANGOPT(PointerAuthBlockDescriptorPointers, 1, 0, "enable signed block descriptors")
+LANGOPT(PointerAuthObjcIsaMasking, 1, 0, "pre- and post-authentication masking for Objective-C isa pointer")
+
 LANGOPT(PointerAuthInitFini, 1, 0, "sign function pointers in init/fini arrays")
 LANGOPT(PointerAuthInitFiniAddressDiscrimination, 1, 0,
         "incorporate address discrimination in authenticated function pointers in init/fini arrays")

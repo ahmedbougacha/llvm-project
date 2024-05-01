@@ -3327,6 +3327,11 @@ void CodeGenFunction::EmitPointerAuthOperandBundle(
   Bundles.emplace_back("ptrauth", Args);
 }
 
+llvm::Value *CodeGenFunction::getObjCIsaMask() {
+  llvm::Constant *maskAddress = CGM.getObjCIsaMaskAddress();
+  return Builder.CreatePtrToInt(maskAddress, IntPtrTy);
+}
+
 static llvm::Value *EmitPointerAuthCommon(CodeGenFunction &CGF,
                                           const CGPointerAuthInfo &PointerAuth,
                                           llvm::Value *Pointer,
@@ -3344,10 +3349,21 @@ static llvm::Value *EmitPointerAuthCommon(CodeGenFunction &CGF,
   // Convert the pointer to intptr_t before signing it.
   auto OrigType = Pointer->getType();
   Pointer = CGF.Builder.CreatePtrToInt(Pointer, CGF.IntPtrTy);
+  llvm::Value *MaskedBits = nullptr;
+  if (PointerAuth.isIsaPointer() &&
+      CGF.getLangOpts().PointerAuthObjcIsaMasking) {
+    llvm::Value *Mask = CGF.getObjCIsaMask();
+    llvm::Value *MaskedPointer = CGF.Builder.CreateAnd(Pointer, Mask);
+    MaskedBits = CGF.Builder.CreateXor(Pointer, MaskedPointer);
+    Pointer = MaskedPointer;
+  }
 
   // call i64 @llvm.ptrauth.sign.i64(i64 %pointer, i32 %key, i64 %discriminator)
   auto Intrinsic = CGF.CGM.getIntrinsic(IntrinsicID);
   Pointer = CGF.EmitRuntimeCall(Intrinsic, {Pointer, Key, Discriminator});
+
+  if (MaskedBits)
+    Pointer = CGF.Builder.CreateOr(Pointer, MaskedBits);
 
   // Convert back to the original type.
   Pointer = CGF.Builder.CreateIntToPtr(Pointer, OrigType);
