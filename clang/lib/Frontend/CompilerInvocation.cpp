@@ -3440,6 +3440,9 @@ static void GeneratePointerAuthArgs(const LangOptions &Opts,
     if (Opts.PointerAuthKernelABIVersion)
       GenerateArg(Consumer, OPT_fptrauth_kernel_abi_version);
   }
+
+  if (Opts.PointerAuthObjcIsaMasking)
+    GenerateArg(Consumer, OPT_fptrauth_objc_isa_masking);
 }
 
 static void ParsePointerAuthArgs(LangOptions &Opts, ArgList &Args,
@@ -3455,6 +3458,8 @@ static void ParsePointerAuthArgs(LangOptions &Opts, ArgList &Args,
   Opts.PointerAuthInitFini = Args.hasArg(OPT_fptrauth_init_fini);
   Opts.PointerAuthBlockDescriptorPointers =
       Args.hasArg(OPT_fptrauth_block_descriptor_pointers);
+
+  Opts.PointerAuthObjcIsaMasking = Args.hasArg(OPT_fptrauth_objc_isa_masking);
 
   Opts.PointerAuthABIVersionEncoded =
       Args.hasArg(OPT_fptrauth_abi_version_EQ) ||
