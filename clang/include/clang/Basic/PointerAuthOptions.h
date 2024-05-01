@@ -29,6 +29,14 @@ constexpr uint16_t InitFiniPointerConstantDiscriminator = 0xD9D4;
 
 constexpr unsigned PointerAuthKeyNone = -1;
 
+/// Constant discriminator to be used with objective-c isa pointers. The value
+/// is ptrauth_string_discriminator("isa")
+constexpr uint16_t IsaPointerConstantDiscriminator = 0x6AE1;
+
+/// Constant discriminator to be used with objective-c superclass pointers.
+/// The value is ptrauth_string_discriminator("objc_class:superclass")
+constexpr uint16_t SuperPointerConstantDiscriminator = 0xB5AB;
+
 /// Constant discriminator to be used with block descriptor pointers. The value
 /// is ptrauth_string_discriminator("block_descriptor")
 constexpr uint16_t BlockDescriptorConstantDiscriminator = 0xC0BB;
@@ -225,6 +233,12 @@ struct PointerAuthOptions {
 
   /// The ABI for a reference to an Objective-C method list in _class_ro_t.
   PointerAuthSchema ObjCMethodListPointer;
+
+  /// The ABI for Objective-C isa pointers.
+  PointerAuthSchema ObjCIsaPointers;
+
+  /// The ABI for Objective-C superclass pointers.
+  PointerAuthSchema ObjCSuperPointers;
 
   /// The ABI for function addresses in .init_array and .fini_array
   PointerAuthSchema InitFiniPointers;
