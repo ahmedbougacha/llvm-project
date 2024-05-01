@@ -4387,6 +4387,15 @@ static bool CheckPtrAuthTypeDiscriminatorOperandType(Sema &S, QualType T,
   return false;
 }
 
+static bool CheckPtrAuthStructKeyOrDiscrminatorOperandType(
+    Sema &S, QualType T, SourceLocation Loc, SourceRange ArgRange) {
+  if (!T->isRecordType()) {
+    S.Diag(Loc, diag::err_ptrauth_struct_key_disc_not_record) << ArgRange;
+    return true;
+  }
+  return false;
+}
+
 static bool CheckExtensionTraitOperandType(Sema &S, QualType T,
                                            SourceLocation Loc,
                                            SourceRange ArgRange,
@@ -4799,6 +4808,11 @@ bool Sema::CheckUnaryExprOrTypeTraitOperand(QualType ExprType,
     return CheckPtrAuthTypeDiscriminatorOperandType(
         *this, ExprType, OpLoc, ExprRange);
 
+  if (ExprKind == UETT_PtrAuthStructKey ||
+      ExprKind == UETT_PtrAuthStructDiscriminator)
+    return CheckPtrAuthStructKeyOrDiscrminatorOperandType(*this, ExprType,
+                                                          OpLoc, ExprRange);
+
   // Explicitly list some types as extensions.
   if (!CheckExtensionTraitOperandType(*this, ExprType, OpLoc, ExprRange,
                                       ExprKind))
@@ -4875,9 +4889,16 @@ ExprResult Sema::CreateUnaryExprOrTypeTraitExpr(TypeSourceInfo *TInfo,
       TInfo->getType()->isVariablyModifiedType())
     TInfo = TransformToPotentiallyEvaluated(TInfo);
 
+  QualType ResultTy;
+  if (ExprKind == UETT_PtrAuthStructKey) {
+    ResultTy = Context.getSignedSizeType();
+  } else {
+    ResultTy = Context.getSizeType();
+  }
+
   // C99 6.5.3.4p4: the type (an unsigned integer type) is size_t.
   return new (Context) UnaryExprOrTypeTraitExpr(
-      ExprKind, TInfo, Context.getSizeType(), OpLoc, R.getEnd());
+      ExprKind, TInfo, ResultTy, OpLoc, R.getEnd());
 }
 
 /// Build a sizeof or alignof expression given an expression
