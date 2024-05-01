@@ -27,6 +27,14 @@ namespace clang {
 
 constexpr unsigned PointerAuthKeyNone = -1;
 
+/// Constant discriminator to be used with objective-c isa pointers. The value
+/// is ptrauth_string_discriminator("isa")
+constexpr uint16_t IsaPointerConstantDiscriminator = 0x6AE1;
+
+/// Constant discriminator to be used with objective-c superclass pointers.
+/// The value is ptrauth_string_discriminator("objc_class:superclass")
+constexpr uint16_t SuperPointerConstantDiscriminator = 0xB5AB;
+
 /// Constant discriminator to be used with block descriptor pointers. The value
 /// is ptrauth_string_discriminator("block_descriptor")
 constexpr uint16_t BlockDescriptorConstantDiscriminator = 0xC0BB;
@@ -54,7 +62,8 @@ public:
     CXXVirtualFunctionPointers = 5,
     CXXMemberFunctionPointers = 6,
     ObjCMethodListPointer = 7,
-    BlockDescriptorPointers = 8,
+    ObjCIsaPointer = 8,
+    BlockDescriptorPointers = 9,
   };
 
   /// Hardware pointer-signing keys in ARM8.3.
@@ -262,6 +271,12 @@ struct PointerAuthOptions {
 
   /// The ABI for C++ member function pointers.
   PointerAuthSchema CXXMemberFunctionPointers;
+
+  /// The ABI for Objective-C isa pointers.
+  PointerAuthSchema ObjCIsaPointers;
+
+  /// The ABI for Objective-C superclass pointers.
+  PointerAuthSchema ObjCSuperPointers;
 };
 
 } // end namespace clang
