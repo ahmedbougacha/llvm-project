@@ -168,6 +168,8 @@ LANGOPT(PointerAuthAuthTraps, 1, 0, "pointer authentication failure traps")
 LANGOPT(PointerAuthVTPtrAddressDiscrimination, 1, 0, "incorporate address discrimination in authenticated vtable pointers")
 LANGOPT(PointerAuthVTPtrTypeDiscrimination, 1, 0, "incorporate type discrimination in authenticated vtable pointers")
 LANGOPT(PointerAuthInitFini, 1, 0, "sign function pointers in init/fini arrays")
+ENUM_LANGOPT(PointerAuthObjcIsaAuthentication, PointerAuthenticationMode, 2,
+             PointerAuthenticationMode::None, "authentication mode for objc isa")
 LANGOPT(PointerAuthObjcIsaMasking, 1, 0, "pre- and post-authentication masking for Objective-C isa pointer")
 LANGOPT(PointerAuthBlockDescriptorPointers, 1, 0, "enable signed block descriptors")
 VALUE_LANGOPT(PointerAuthABIVersion, 32, 0, "pointer authentication ABI version")
