@@ -3855,6 +3855,7 @@ private:
   ExprResult ParseExpressionTrait();
 
   ExprResult ParseBuiltinPtrauthTypeDiscriminator();
+  ExprResult ParseBuiltinPtrauthStructKeyOrDisc(bool ParseKey);
 
   //===--------------------------------------------------------------------===//
   // Preprocessor code-completion pass-through

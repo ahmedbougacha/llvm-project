@@ -1260,6 +1260,20 @@ public:
   uint16_t
   getPointerAuthVTablePointerDiscriminator(const CXXRecordDecl *record);
 
+  bool typeContainsAuthenticatedNull(QualType) const;
+  bool typeContainsAuthenticatedNull(const Type *) const;
+  std::optional<bool> tryTypeContainsAuthenticatedNull(QualType) const;
+
+  /// Return the key of attribute ptrauth_struct on the record. If the attribute
+  /// isn't on the record, return the none key. If the key argument is value
+  /// dependent, set the boolean flag to false.
+  std::pair<bool, unsigned> getPointerAuthStructKey(const RecordDecl *RD) const;
+
+  /// Return the discriminator of attribute ptrauth_struct on the record. If the
+  /// key argument is value dependent, set the boolean flag to false.
+  std::pair<bool, unsigned>
+  getPointerAuthStructDisc(const RecordDecl *RD) const;
+
   // Determine whether the type can have qualifier __ptrauth with key
   // ptrauth_key_none.
   bool canQualifyWithPtrAuthKeyNone(QualType T) const {
@@ -1272,12 +1286,19 @@ public:
     if (PointeeType->isFunctionType())
       return false;
 
+    // Disallow the qualifer on classes annotated with attribute ptrauth_struct
+    // with a key that isn't the none key.
+    if (auto *RD = PointeeType->getAsRecordDecl()) {
+      std::pair<bool, unsigned> P = getPointerAuthStructKey(RD);
+      if (P.first && P.second != PointerAuthKeyNone)
+        return false;
+    }
+
     return true;
   }
 
-  bool typeContainsAuthenticatedNull(QualType) const;
-  bool typeContainsAuthenticatedNull(const Type *) const;
-  std::optional<bool> tryTypeContainsAuthenticatedNull(QualType) const;
+  bool hasPointerAuthStructMismatch(const RecordDecl *RD0,
+                                    const RecordDecl *RD1) const;
 
   /// Apply Objective-C protocol qualifiers to the given type.
   /// \param allowOnPointerType specifies if we can apply protocol

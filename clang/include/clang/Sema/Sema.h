@@ -2911,6 +2911,9 @@ public:
 
     // Extra discriminator argument of __ptrauth.
     PADAK_ExtraDiscPtrAuth,
+
+    // Type discriminator argument of ptrauth_struct.
+    PADAK_TypeDiscPtrAuthStruct,
   };
 
   bool checkPointerAuthDiscriminatorArg(Expr *arg, PointerAuthDiscArgKind kind,
@@ -3563,6 +3566,9 @@ public:
   bool checkStringLiteralArgumentAttr(const ParsedAttr &Attr, unsigned ArgNum,
                                       StringRef &Str,
                                       SourceLocation *ArgLocation = nullptr);
+
+  void addPointerAuthStructAttr(Decl *D, const AttributeCommonInfo &CI,
+                                Expr *Key, Expr *Disc);
 
   /// Determine if type T is a valid subject for a nonnull and similar
   /// attributes. By default, we look through references (the behavior used by
