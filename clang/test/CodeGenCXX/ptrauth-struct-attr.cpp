@@ -189,7 +189,7 @@ void test_nonvirtual0(S0 *s) {
 // CHECK: ret ptr %[[CALL]]
 
 // CHECK: landingpad { ptr, i32 }
-// CHECK: call void @_ZdlPvm(ptr %[[CALL]], i64 24)
+// CHECK: call void @_ZdlPv(ptr %[[CALL]])
 
 S1 *test_new0() {
   return new S1();
@@ -236,7 +236,7 @@ S1 *test_new1(void *p) {
 
 // CHECK: icmp eq ptr %[[ARRAYDESTROY_ELEMENT]], %[[V2]]
 
-// CHECK: call void @_ZdaPvm(ptr %[[CALL]], i64 112)
+// CHECK: call void @_ZdaPv(ptr %[[CALL]])
 
 S1 *test_new2() {
   return new S1[4];
@@ -251,10 +251,10 @@ S1 *test_new2() {
 // CHECK: %[[V3:.*]] = inttoptr i64 %[[V2]] to ptr
 // CHECK: invoke ptr @_ZN2S1D1Ev(ptr nonnull align {{[0-9]+}} dereferenceable(24) %[[V0]])
 
-// CHECK: call void @_ZdlPvm(ptr %[[V3]], i64 24)
+// CHECK: call void @_ZdlPv(ptr %[[V3]])
 
 // CHECK: landingpad { ptr, i32 }
-// CHECK: call void @_ZdlPvm(ptr %[[V3]], i64 24)
+// CHECK: call void @_ZdlPv(ptr %[[V3]])
 
 void test_delete0(S1 *a) {
   delete a;
@@ -288,7 +288,7 @@ void test_delete0(S1 *a) {
 
 // CHECK: icmp eq ptr %[[ARRAYDESTROY_ELEMENT]], %[[V12]]
 
-// CHECK: call void @_ZdaPvm(ptr %[[RESIGNEDGEP]], i64 %{{.*}})
+// CHECK: call void @_ZdaPv(ptr %[[RESIGNEDGEP]])
 
 // CHECK: landingpad { ptr, i32 }
 
@@ -301,7 +301,7 @@ void test_delete0(S1 *a) {
 
 // CHECK: icmp eq ptr %[[ARRAYDESTROY_ELEMENT5]], %[[V12]]
 
-// CHECK: call void @_ZdaPvm(ptr %[[RESIGNEDGEP]], i64 %{{.*}})
+// CHECK: call void @_ZdaPv(ptr %[[RESIGNEDGEP]])
 
 void test_delete1(S1 *a) {
   delete [] a;
