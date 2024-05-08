@@ -2,5 +2,5 @@
 
 @var = global i32 0
 
-; CHECK: error: signed pointer address discriminator must be a pointer
-@auth_var = global ptr ptrauth (ptr @var, i32 2, i8 0, i64 65535)
+; CHECK: error: constant ptrauth integer discriminator must be i64 constant
+@auth_var = global ptr ptrauth (ptr @var, i32 2, ptr null, i64 ptrtoint (ptr @var to i64))

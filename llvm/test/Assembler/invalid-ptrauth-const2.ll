@@ -2,5 +2,5 @@
 
 @var = global i32 0
 
-; CHECK: error: signed pointer key must be i32 constant integer
-@auth_var = global ptr ptrauth (ptr @var, i32 ptrtoint (ptr @var to i32), ptr null, i64 65535)
+; CHECK: error: constant ptrauth key must be i32 constant
+@auth_var = global ptr ptrauth (ptr @var, i32 ptrtoint (ptr @var to i32))

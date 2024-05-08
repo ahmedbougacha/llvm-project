@@ -1557,11 +1557,11 @@ Expected<Value *> BitcodeReader::materializeValue(unsigned StartValID,
           if (!Key)
             return error("ptrauth key operand must be ConstantInt");
 
-          auto *Disc = dyn_cast<ConstantInt>(ConstOps[3]);
+          auto *Disc = dyn_cast<ConstantInt>(ConstOps[2]);
           if (!Disc)
             return error("ptrauth disc operand must be ConstantInt");
 
-          C = ConstantPtrAuth::get(ConstOps[0], Key, ConstOps[2], Disc);
+          C = ConstantPtrAuth::get(ConstOps[0], Key, Disc, ConstOps[3]);
           break;
         }
         case BitcodeConstant::NoCFIOpcode: {
@@ -3646,7 +3646,7 @@ Error BitcodeReader::parseConstants() {
     case bitc::CST_CODE_PTRAUTH: {
       if (Record.size() < 4)
         return error("Invalid ptrauth record");
-      // Ptr, Key, AddrDisc, Disc
+      // Ptr, Key, Disc, AddrDisc
       V = BitcodeConstant::create(
         Alloc, CurTy, BitcodeConstant::ConstantPtrAuthOpcode,
         {(unsigned)Record[0], (unsigned)Record[1], (unsigned)Record[2],

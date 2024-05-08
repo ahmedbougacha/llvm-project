@@ -1592,12 +1592,20 @@ static void WriteConstantInternal(raw_ostream &Out, const Constant *CV,
 
   if (const ConstantPtrAuth *CPA = dyn_cast<ConstantPtrAuth>(CV)) {
     Out << "ptrauth (";
+
+    // ptrauth (ptr CST, i32 KEY[, i64 DISC[, ptr ADDRDISC]?]?)
+    unsigned NumOpsToWrite = 2;
+    if (!CPA->getOperand(2)->isNullValue())
+      NumOpsToWrite = 3;
+    if (!CPA->getOperand(3)->isNullValue())
+      NumOpsToWrite = 4;
+
     ListSeparator LS;
-    for (auto *Op : CPA->operand_values()) {
+    for (unsigned i = 0, e = NumOpsToWrite; i != e; ++i) {
       Out << LS;
-      WriterCtx.TypePrinter->print(Op->getType(), Out);
+      WriterCtx.TypePrinter->print(CPA->getOperand(i)->getType(), Out);
       Out << ' ';
-      WriteAsOperandInternal(Out, Op, WriterCtx);
+      WriteAsOperandInternal(Out, CPA->getOperand(i), WriterCtx);
     }
     Out << ')';
     return;

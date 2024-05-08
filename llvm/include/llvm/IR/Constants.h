@@ -1013,8 +1013,8 @@ class ConstantPtrAuth final : public Constant {
   friend struct ConstantPtrAuthKeyType;
   friend class Constant;
 
-  ConstantPtrAuth(Constant *Ptr, ConstantInt *Key, Constant *AddrDisc,
-                  ConstantInt *Disc);
+  ConstantPtrAuth(Constant *Ptr, ConstantInt *Key, ConstantInt *Disc,
+                  Constant *AddrDisc);
 
   void *operator new(size_t s) { return User::operator new(s, 4); }
 
@@ -1024,7 +1024,7 @@ class ConstantPtrAuth final : public Constant {
 public:
   /// Return a pointer authenticated with the specified parameters.
   static ConstantPtrAuth *get(Constant *Ptr, ConstantInt *Key,
-                              Constant *AddrDisc, ConstantInt *Disc);
+                              ConstantInt *Disc, Constant *AddrDisc);
 
   /// Produce a new ptrauth expression signing the given value using
   /// the same schema as is stored in one.
@@ -1039,16 +1039,16 @@ public:
   /// The Key ID, an i32 constant.
   ConstantInt *getKey() const { return cast<ConstantInt>(Op<1>().get()); }
 
+  /// The discriminator.
+  ConstantInt *getDiscriminator() const {
+    return cast<ConstantInt>(Op<2>().get());
+  }
+
   /// The address discriminator if any, or the null constant.
   /// If present, this must be a value equivalent to the storage location of
   /// the only user of the authenticated ptrauth global.
   Constant *getAddrDiscriminator() const {
-    return cast<Constant>(Op<2>().get());
-  }
-
-  /// The discriminator.
-  ConstantInt *getDiscriminator() const {
-    return cast<ConstantInt>(Op<3>().get());
+    return cast<Constant>(Op<3>().get());
   }
 
   /// Whether there is any non-null address discriminator.

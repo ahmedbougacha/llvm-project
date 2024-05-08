@@ -4755,7 +4755,7 @@ need to refer to the actual function body.
 Pointer Authentication Constants
 --------------------------------
 
-``ptrauth (ptr CST, i32 KEY, ptr ADDRDISC, i64 DISC)``
+``ptrauth (ptr CST, i32 KEY[, i64 DISC[, ptr ADDRDISC]?]?)``
 
 A '``ptrauth``' constant represents a pointer with a cryptographic
 authentication signature embedded into some bits, as described in the
@@ -4765,6 +4765,9 @@ A '``ptrauth``' constant is simply a constant equivalent to the
 ``llvm.ptrauth.sign`` intrinsic, potentially fed by a discriminator
 ``llvm.ptrauth.blend`` if needed.
 
+Its type is the same as the first argument.  An integer constant discriminator
+and an address discriminator may be optionally specified.  Otherwise, they have
+values ``i64 0`` and ``ptr null``.
 
 If the address disciminator is ``null`` then the expression is equivalent to
 

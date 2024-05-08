@@ -2071,28 +2071,28 @@ bool ConstantPtrAuth::isCompatibleWith(const Value *Key,
 }
 
 ConstantPtrAuth *ConstantPtrAuth::getWithSameSchema(Constant *Pointer) const {
-  return get(Pointer, getKey(), getAddrDiscriminator(), getDiscriminator());
+  return get(Pointer, getKey(), getDiscriminator(), getAddrDiscriminator());
 }
 
 ConstantPtrAuth *ConstantPtrAuth::get(Constant *Ptr, ConstantInt *Key,
-                                      Constant *AddrDisc, ConstantInt *Disc) {
-  Constant *ArgVec[] = {Ptr, Key, AddrDisc, Disc};
+                                      ConstantInt *Disc, Constant *AddrDisc) {
+  Constant *ArgVec[] = {Ptr, Key, Disc, AddrDisc};
   ConstantPtrAuthKeyType MapKey(ArgVec);
   LLVMContextImpl *pImpl = Ptr->getContext().pImpl;
   return pImpl->ConstantPtrAuths.getOrCreate(Ptr->getType(), MapKey);
 }
 
 ConstantPtrAuth::ConstantPtrAuth(Constant *Ptr, ConstantInt *Key,
-                                 Constant *AddrDisc, ConstantInt *Disc)
+                                 ConstantInt *Disc, Constant *AddrDisc)
     : Constant(Ptr->getType(), Value::ConstantPtrAuthVal, &Op<0>(), 4) {
   assert(Ptr->getType()->isPointerTy());
   assert(Key->getBitWidth() == 32);
-  assert(AddrDisc->getType()->isPointerTy());
   assert(Disc->getBitWidth() == 64);
+  assert(AddrDisc->getType()->isPointerTy());
   setOperand(0, Ptr);
   setOperand(1, Key);
-  setOperand(2, AddrDisc);
-  setOperand(3, Disc);
+  setOperand(2, Disc);
+  setOperand(3, AddrDisc);
 }
 
 /// Remove the constant from the constant table.

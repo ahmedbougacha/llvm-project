@@ -240,7 +240,7 @@ The latter are represented using a
 which describes an authenticated relocation producing a signed pointer.
 
 ```llvm
-  ptrauth (ptr CST, i32 KEY, ptr ADDRDISC, i64 DISC)
+  ptrauth (ptr CST, i32 KEY, i64 DISC, ptr ADDRDISC)
 ```
 
 is equivalent to:

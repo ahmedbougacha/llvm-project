@@ -579,7 +579,7 @@ struct ConstantPtrAuthKeyType {
 
   ConstantPtrAuth *create(TypeClass *Ty) const {
     return new ConstantPtrAuth(Operands[0], cast<ConstantInt>(Operands[1]),
-                               Operands[2], cast<ConstantInt>(Operands[3]));
+                               cast<ConstantInt>(Operands[2]), Operands[3]);
   }
 };
 

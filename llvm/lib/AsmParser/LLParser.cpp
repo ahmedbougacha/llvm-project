@@ -4047,44 +4047,56 @@ bool LLParser::parseValID(ValID &ID, PerFunctionState *PFS, Type *ExpectedTy) {
     return false;
   }
   case lltok::kw_ptrauth: {
-    // ValID ::= 'ptrauth' '(' ptr @foo ',' i32 <key> ','
-    //                         ptr addrdisc ',' i64 <disc> ')'
+    // ValID ::= 'ptrauth' '(' ptr @foo ',' i32 <key>
+    //                         (',' i64 <disc> (',' ptr addrdisc)? )? ')'
     Lex.Lex();
 
-    Constant *Ptr, *Key, *AddrDisc, *Disc;
+    Constant *Ptr, *Key;
+    Constant *Disc = nullptr, *AddrDisc = nullptr;
 
     if (parseToken(lltok::lparen,
-                   "expected '(' in signed pointer expression") ||
+                   "expected '(' in constant ptrauth expression") ||
         parseGlobalTypeAndValue(Ptr) ||
         parseToken(lltok::comma,
-                   "expected comma in signed pointer expression") ||
-        parseGlobalTypeAndValue(Key) ||
-        parseToken(lltok::comma,
-                   "expected comma in signed pointer expression") ||
-        parseGlobalTypeAndValue(AddrDisc) ||
-        parseToken(lltok::comma,
-                   "expected comma in signed pointer expression") ||
-        parseGlobalTypeAndValue(Disc) ||
-        parseToken(lltok::rparen, "expected ')' in signed pointer expression"))
+                   "expected comma in constant ptrauth expression") ||
+        parseGlobalTypeAndValue(Key))
+      return true;
+    // If present, parse the optional disc/addrdisc.
+    if (EatIfPresent(lltok::comma))
+      if (parseGlobalTypeAndValue(Disc) ||
+          (EatIfPresent(lltok::comma) && parseGlobalTypeAndValue(AddrDisc)))
+        return true;
+    if (parseToken(lltok::rparen,
+                   "expected ')' in constant ptrauth expression"))
       return true;
 
     if (!Ptr->getType()->isPointerTy())
-      return error(ID.Loc, "signed pointer must be a pointer");
+      return error(ID.Loc, "constant ptrauth base pointer must be a pointer");
 
     auto *KeyC = dyn_cast<ConstantInt>(Key);
     if (!KeyC || KeyC->getBitWidth() != 32)
-      return error(ID.Loc, "signed pointer key must be i32 constant integer");
+      return error(ID.Loc, "constant ptrauth key must be i32 constant");
 
-    if (!AddrDisc->getType()->isPointerTy())
-      return error(ID.Loc,
-                   "signed pointer address discriminator must be a pointer");
+    ConstantInt *DiscC = nullptr;
+    if (Disc) {
+      DiscC = dyn_cast<ConstantInt>(Disc);
+      if (!DiscC || DiscC->getBitWidth() != 64)
+        return error(
+            ID.Loc,
+            "constant ptrauth integer discriminator must be i64 constant");
+    } else {
+      DiscC = ConstantInt::get(Type::getInt64Ty(Context), 0);
+    }
 
-    auto *DiscC = dyn_cast<ConstantInt>(Disc);
-    if (!DiscC || DiscC->getBitWidth() != 64)
-      return error(ID.Loc,
-                   "signed pointer discriminator must be i64 constant integer");
+    if (AddrDisc) {
+      if (!AddrDisc->getType()->isPointerTy())
+        return error(
+            ID.Loc, "constant ptrauth address discriminator must be a pointer");
+    } else {
+      AddrDisc = ConstantPointerNull::get(PointerType::get(Context, 0));
+    }
 
-    ID.ConstantVal = ConstantPtrAuth::get(Ptr, KeyC, AddrDisc, DiscC);
+    ID.ConstantVal = ConstantPtrAuth::get(Ptr, KeyC, DiscC, AddrDisc);
     ID.Kind = ValID::t_Constant;
     return false;
   }
