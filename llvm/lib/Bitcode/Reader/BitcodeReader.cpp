@@ -3643,7 +3643,7 @@ Error BitcodeReader::parseConstants() {
                                   Record[1]);
       break;
     }
-    case bitc::CST_CODE_SIGNED_PTR: {
+    case bitc::CST_CODE_PTRAUTH: {
       if (Record.size() < 4)
         return error("Invalid ptrauth record");
       // Ptr, Key, AddrDisc, Disc

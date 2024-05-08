@@ -4750,29 +4750,35 @@ reference to the CFI jump table in the ``LowerTypeTests`` pass. These constants
 may be useful in low-level programs, such as operating system kernels, which
 need to refer to the actual function body.
 
-.. _ptrauth:
+.. _ptrauth_constant:
 
-Authenticated Pointers
-----------------------
+Pointer Authentication Constants
+--------------------------------
 
-``ptrauth (ptr CST, i32 KEY, ptr ADDRDISC, i16 DISC)
+``ptrauth (ptr CST, i32 KEY, ptr ADDRDISC, i64 DISC)``
 
 A '``ptrauth``' constant represents a pointer with a cryptographic
-authentication signature embedded into some bits. Its type is the same as the
-first argument.
+authentication signature embedded into some bits, as described in the
+`Pointer Authentication <PointerAuth.html>`__ document.
+
+A '``ptrauth``' constant is simply a constant equivalent to the
+``llvm.ptrauth.sign`` intrinsic, potentially fed by a discriminator
+``llvm.ptrauth.blend`` if needed.
 
 
 If the address disciminator is ``null`` then the expression is equivalent to
 
-.. code-block:llvm
-    %tmp = call i64 @llvm.ptrauth.sign.i64(i64 ptrtoint (ptr CST to i64), i32 KEY, i64 DISC)
+.. code-block:: llvm
+
+    %tmp = call i64 @llvm.ptrauth.sign(i64 ptrtoint (ptr CST to i64), i32 KEY, i64 DISC)
     %val = inttoptr i64 %tmp to ptr
 
-If the address discriminator is present, then it is
+Otherwise, the expression is equivalent to:
 
-.. code-block:llvm
-    %tmp1 = call i64 @llvm.ptrauth.blend.i64(i64 ptrtoint (ptr ADDRDISC to i64), i64 DISC)
-    %tmp2 = call i64 @llvm.ptrauth.sign.i64(i64 ptrtoint (ptr CST to i64), i64  %tmp1)
+.. code-block:: llvm
+
+    %tmp1 = call i64 @llvm.ptrauth.blend(i64 ptrtoint (ptr ADDRDISC to i64), i64 DISC)
+    %tmp2 = call i64 @llvm.ptrauth.sign(i64 ptrtoint (ptr CST to i64), i32 KEY, i64 %tmp1)
     %val = inttoptr i64 %tmp2 to ptr
 
 .. _constantexprs:

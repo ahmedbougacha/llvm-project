@@ -1590,14 +1590,14 @@ static void WriteConstantInternal(raw_ostream &Out, const Constant *CV,
     return;
   }
 
-  if (const ConstantPtrAuth *SP = dyn_cast<ConstantPtrAuth>(CV)) {
+  if (const ConstantPtrAuth *CPA = dyn_cast<ConstantPtrAuth>(CV)) {
     Out << "ptrauth (";
     ListSeparator LS;
-    for (unsigned i = 0; i < SP->getNumOperands(); ++i) {
+    for (auto *Op : CPA->operand_values()) {
       Out << LS;
-      WriterCtx.TypePrinter->print(SP->getOperand(i)->getType(), Out);
+      WriterCtx.TypePrinter->print(Op->getType(), Out);
       Out << ' ';
-      WriteAsOperandInternal(Out, SP->getOperand(i), WriterCtx);
+      WriteAsOperandInternal(Out, Op, WriterCtx);
     }
     Out << ')';
     return;

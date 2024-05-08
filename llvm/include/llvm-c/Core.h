@@ -286,7 +286,6 @@ typedef enum {
   LLVMInstructionValueKind,
   LLVMPoisonValueValueKind,
   LLVMConstantTargetNoneValueKind,
-  LLVMConstantPtrAuthValueKind,
 } LLVMValueKind;
 
 typedef enum {
