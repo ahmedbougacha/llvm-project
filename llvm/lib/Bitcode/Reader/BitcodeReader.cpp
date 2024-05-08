@@ -3644,18 +3644,13 @@ Error BitcodeReader::parseConstants() {
       break;
     }
     case bitc::CST_CODE_SIGNED_PTR: {
-      if (Record.size() < 6)
-        return error("Invalid record");
-      Type *PtrTy = getTypeByID(Record[0]);
-      if (!PtrTy)
-        return error("Invalid record");
-
-      // PtrTy, Ptr, Key, AddrDiscTy, AddrDisc, Disc
+      if (Record.size() < 4)
+        return error("Invalid ptrauth record");
+      // Ptr, Key, AddrDisc, Disc
       V = BitcodeConstant::create(
         Alloc, CurTy, BitcodeConstant::ConstantPtrAuthOpcode,
-        {(unsigned)Record[1], (unsigned)Record[2], (unsigned)Record[4],
-         (unsigned)Record[5]});
-
+        {(unsigned)Record[0], (unsigned)Record[1], (unsigned)Record[2],
+         (unsigned)Record[3]});
       break;
     }
     }

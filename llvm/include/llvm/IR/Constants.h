@@ -1034,18 +1034,22 @@ public:
   DECLARE_TRANSPARENT_OPERAND_ACCESSORS(Constant);
 
   /// The pointer that is authenticated in this authenticated global reference.
-  Constant *getPointer() const { return (Constant *)Op<0>().get(); }
+  Constant *getPointer() const { return cast<Constant>(Op<0>().get()); }
 
   /// The Key ID, an i32 constant.
-  ConstantInt *getKey() const { return (ConstantInt *)Op<1>().get(); }
+  ConstantInt *getKey() const { return cast<ConstantInt>(Op<1>().get()); }
 
   /// The address discriminator if any, or the null constant.
   /// If present, this must be a value equivalent to the storage location of
   /// the only user of the authenticated ptrauth global.
-  Constant *getAddrDiscriminator() const { return (Constant *)Op<2>().get(); }
+  Constant *getAddrDiscriminator() const {
+    return cast<Constant>(Op<2>().get());
+  }
 
   /// The discriminator.
-  ConstantInt *getDiscriminator() const { return (ConstantInt *)Op<3>().get(); }
+  ConstantInt *getDiscriminator() const {
+    return cast<ConstantInt>(Op<3>().get());
+  }
 
   /// Whether there is any non-null address discriminator.
   bool hasAddressDiversity() const {

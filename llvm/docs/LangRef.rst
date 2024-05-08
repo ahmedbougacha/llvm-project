@@ -4750,7 +4750,7 @@ reference to the CFI jump table in the ``LowerTypeTests`` pass. These constants
 may be useful in low-level programs, such as operating system kernels, which
 need to refer to the actual function body.
 
-.. _ptrauth
+.. _ptrauth:
 
 Authenticated Pointers
 ----------------------
@@ -4774,8 +4774,6 @@ If the address discriminator is present, then it is
     %tmp1 = call i64 @llvm.ptrauth.blend.i64(i64 ptrtoint (ptr ADDRDISC to i64), i64 DISC)
     %tmp2 = call i64 @llvm.ptrauth.sign.i64(i64 ptrtoint (ptr CST to i64), i64  %tmp1)
     %val = inttoptr i64 %tmp2 to ptr
-
-    %tmp = call i64 @llvm.ptrauth.blend.i64
 
 .. _constantexprs:
 

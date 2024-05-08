@@ -2023,18 +2023,18 @@ Value *NoCFIValue::handleOperandChangeImpl(Value *From, Value *To) {
 
 static bool areEquivalentAddrDiscriminators(const Value *V1, const Value *V2,
                                             const DataLayout &DL) {
-  APInt V1Off(DL.getPointerSizeInBits(), 0);
-  APInt V2Off(DL.getPointerSizeInBits(), 0);
+  APInt Off1(DL.getTypeSizeInBits(V1->getType()), 0);
+  APInt Off2(DL.getTypeSizeInBits(V2->getType()), 0);
 
   if (auto *V1Cast = dyn_cast<PtrToIntOperator>(V1))
     V1 = V1Cast->getPointerOperand();
   if (auto *V2Cast = dyn_cast<PtrToIntOperator>(V2))
     V2 = V2Cast->getPointerOperand();
   auto *V1Base = V1->stripAndAccumulateConstantOffsets(
-      DL, V1Off, /*AllowNonInbounds=*/true);
+      DL, Off1, /*AllowNonInbounds=*/true);
   auto *V2Base = V2->stripAndAccumulateConstantOffsets(
-      DL, V2Off, /*AllowNonInbounds=*/true);
-  return V1Base == V2Base && V1Off == V2Off;
+      DL, Off2, /*AllowNonInbounds=*/true);
+  return V1Base == V2Base && Off1 == Off2;
 }
 
 bool ConstantPtrAuth::isCompatibleWith(const Value *Key,
@@ -2085,12 +2085,10 @@ ConstantPtrAuth *ConstantPtrAuth::get(Constant *Ptr, ConstantInt *Key,
 ConstantPtrAuth::ConstantPtrAuth(Constant *Ptr, ConstantInt *Key,
                                  Constant *AddrDisc, ConstantInt *Disc)
     : Constant(Ptr->getType(), Value::ConstantPtrAuthVal, &Op<0>(), 4) {
-#ifndef NDEBUG
   assert(Ptr->getType()->isPointerTy());
   assert(Key->getBitWidth() == 32);
   assert(AddrDisc->getType()->isPointerTy());
   assert(Disc->getBitWidth() == 64);
-#endif
   setOperand(0, Ptr);
   setOperand(1, Key);
   setOperand(2, AddrDisc);
@@ -2106,11 +2104,9 @@ Value *ConstantPtrAuth::handleOperandChangeImpl(Value *From, Value *ToV) {
   assert(isa<Constant>(ToV) && "Cannot make Constant refer to non-constant!");
   Constant *To = cast<Constant>(ToV);
 
-  SmallVector<Constant *, 8> Values;
-  Values.reserve(getNumOperands()); // Build replacement array.
+  SmallVector<Constant *, 4> Values;
+  Values.reserve(getNumOperands());
 
-  // Fill values with the modified operands of the constant array.  Also,
-  // compute whether this turns into an all-zeros array.
   unsigned NumUpdated = 0;
 
   Use *OperandList = getOperandList();
@@ -2125,7 +2121,6 @@ Value *ConstantPtrAuth::handleOperandChangeImpl(Value *From, Value *ToV) {
     Values.push_back(Val);
   }
 
-  // FIXME: shouldn't we check it's not already there?
   return getContext().pImpl->ConstantPtrAuths.replaceOperandsInPlace(
       Values, this, From, To, NumUpdated, OperandNo);
 }

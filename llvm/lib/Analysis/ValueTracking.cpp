@@ -7261,9 +7261,6 @@ static bool isGuaranteedNotToBeUndefOrPoison(
         isa<ConstantPointerNull>(C) || isa<Function>(C))
       return true;
 
-    if (isa<ConstantPtrAuth>(C))
-      return true;
-
     if (C->getType()->isVectorTy() && !isa<ConstantExpr>(C))
       return (!includesUndef(Kind) ? !C->containsPoisonElement()
                                    : !C->containsUndefOrPoisonElement()) &&
