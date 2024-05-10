@@ -103,6 +103,24 @@ CGPointerAuthInfo CodeGenModule::getFunctionPointerAuthInfo(QualType T) {
                            /* authenticatesNullValues */ false, Discriminator);
 }
 
+CGPointerAuthInfo
+CodeGenModule::getMemberFunctionPointerAuthInfo(QualType functionType) {
+  assert(functionType->getAs<MemberPointerType>() &&
+         "MemberPointerType expected");
+  auto &schema = getCodeGenOpts().PointerAuth.CXXMemberFunctionPointers;
+  if (!schema)
+    return CGPointerAuthInfo();
+
+  assert(!schema.isAddressDiscriminated() &&
+         "function pointers cannot use address-specific discrimination");
+
+  auto discriminator =
+      getPointerAuthOtherDiscriminator(schema, GlobalDecl(), functionType);
+  return CGPointerAuthInfo(schema.getKey(), schema.getAuthenticationMode(),
+                           /* isIsaPointer */ false,
+                           /* authenticatesNullValues */ false, discriminator);
+}
+
 /// Return the natural pointer authentication for values of the given
 /// pointee type.
 static CGPointerAuthInfo
@@ -750,6 +768,26 @@ llvm::Constant *CodeGenModule::getFunctionPointer(GlobalDecl GD,
                                                 Proto->getExtInfo());
 
   return getFunctionPointer(getRawFunctionPointer(GD, Ty), FuncType, GD);
+}
+
+llvm::Constant *
+CodeGenModule::getMemberFunctionPointer(llvm::Constant *pointer,
+                                        QualType functionType) {
+  if (auto pointerAuth = getMemberFunctionPointerAuthInfo(functionType)) {
+    return getConstantSignedPointer(
+        pointer, pointerAuth.getKey(), nullptr,
+        cast_or_null<llvm::Constant>(pointerAuth.getDiscriminator()));
+  }
+
+  return pointer;
+}
+
+llvm::Constant *
+CodeGenModule::getMemberFunctionPointer(const FunctionDecl *FD, llvm::Type *Ty) {
+  QualType functionType = FD->getType();
+  functionType = getContext().getMemberPointerType(
+      functionType, cast<CXXMethodDecl>(FD)->getParent()->getTypeForDecl());
+  return getMemberFunctionPointer(getRawFunctionPointer(FD, Ty), functionType);
 }
 
 llvm::Value *CodeGenFunction::AuthPointerToPointerCast(llvm::Value *ResultPtr,
