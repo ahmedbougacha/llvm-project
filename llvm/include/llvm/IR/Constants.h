@@ -1007,7 +1007,7 @@ struct OperandTraits<NoCFIValue> : public FixedNumOperandTraits<NoCFIValue, 1> {
 
 DEFINE_TRANSPARENT_OPERAND_ACCESSORS(NoCFIValue, Value)
 
-/// A signed pointer
+/// A signed pointer, in the ptrauth sense.
 ///
 class ConstantPtrAuth final : public Constant {
   friend struct ConstantPtrAuthKeyType;
@@ -1022,7 +1022,7 @@ class ConstantPtrAuth final : public Constant {
   Value *handleOperandChangeImpl(Value *From, Value *To);
 
 public:
-  /// Return a pointer authenticated with the specified parameters.
+  /// Return a pointer signed with the specified parameters.
   static ConstantPtrAuth *get(Constant *Ptr, ConstantInt *Key,
                               ConstantInt *Disc, Constant *AddrDisc);
 
@@ -1033,34 +1033,34 @@ public:
   /// Transparently provide more efficient getOperand methods.
   DECLARE_TRANSPARENT_OPERAND_ACCESSORS(Constant);
 
-  /// The pointer that is authenticated in this authenticated global reference.
+  /// The pointer that is signed in this ptrauth signed pointer.
   Constant *getPointer() const { return cast<Constant>(Op<0>().get()); }
 
   /// The Key ID, an i32 constant.
   ConstantInt *getKey() const { return cast<ConstantInt>(Op<1>().get()); }
 
-  /// The discriminator.
+  /// The integer discriminator, an i64 constant, or 0.
   ConstantInt *getDiscriminator() const {
     return cast<ConstantInt>(Op<2>().get());
   }
 
   /// The address discriminator if any, or the null constant.
   /// If present, this must be a value equivalent to the storage location of
-  /// the only user of the authenticated ptrauth global.
+  /// the only global-initializer user of the ptrauth signed pointer.
   Constant *getAddrDiscriminator() const {
     return cast<Constant>(Op<3>().get());
   }
 
   /// Whether there is any non-null address discriminator.
-  bool hasAddressDiversity() const {
+  bool hasAddressDiscriminator() const {
     return !getAddrDiscriminator()->isNullValue();
   }
 
-  /// Check whether an authentication operation with key \p KeyV and (possibly
-  /// blended) discriminator \p DiscriminatorV is compatible with this
-  /// authenticated global reference.
-  bool isCompatibleWith(const Value *Key, const Value *Discriminator,
-                        const DataLayout &DL) const;
+  /// Check whether an authentication operation with key \p Key and (possibly
+  /// blended) discriminator \p Discriminator is known to be compatible with
+  /// this ptrauth signed pointer.
+  bool isKnownCompatibleWith(const Value *Key, const Value *Discriminator,
+                             const DataLayout &DL) const;
 
   /// Methods for support type inquiry through isa, cast, and dyn_cast:
   static bool classof(const Value *V) {

@@ -4769,7 +4769,7 @@ Its type is the same as the first argument.  An integer constant discriminator
 and an address discriminator may be optionally specified.  Otherwise, they have
 values ``i64 0`` and ``ptr null``.
 
-If the address disciminator is ``null`` then the expression is equivalent to
+If the address discriminator is ``null`` then the expression is equivalent to
 
 .. code-block:: llvm
 

@@ -2021,65 +2021,16 @@ Value *NoCFIValue::handleOperandChangeImpl(Value *From, Value *To) {
 //---- ConstantPtrAuth::get() implementations.
 //
 
-static bool areEquivalentAddrDiscriminators(const Value *V1, const Value *V2,
-                                            const DataLayout &DL) {
-  APInt Off1(DL.getTypeSizeInBits(V1->getType()), 0);
-  APInt Off2(DL.getTypeSizeInBits(V2->getType()), 0);
-
-  if (auto *V1Cast = dyn_cast<PtrToIntOperator>(V1))
-    V1 = V1Cast->getPointerOperand();
-  if (auto *V2Cast = dyn_cast<PtrToIntOperator>(V2))
-    V2 = V2Cast->getPointerOperand();
-  auto *V1Base = V1->stripAndAccumulateConstantOffsets(
-      DL, Off1, /*AllowNonInbounds=*/true);
-  auto *V2Base = V2->stripAndAccumulateConstantOffsets(
-      DL, Off2, /*AllowNonInbounds=*/true);
-  return V1Base == V2Base && Off1 == Off2;
-}
-
-bool ConstantPtrAuth::isCompatibleWith(const Value *Key,
-                                       const Value *Discriminator,
-                                       const DataLayout &DL) const {
-  // If the keys are different, there's no chance for this to be compatible.
-  if (Key != getKey())
-    return false;
-
-  // If the discriminators are the same, this is compatible iff there is no
-  // address discriminator.
-  if (Discriminator == getDiscriminator())
-    return getAddrDiscriminator()->isNullValue();
-
-  // If we dynamically blend the discriminator with the address discriminator,
-  // this is compatible.
-  if (auto *DiscBlend = dyn_cast<IntrinsicInst>(Discriminator)) {
-    if (DiscBlend->getIntrinsicID() == Intrinsic::ptrauth_blend &&
-        DiscBlend->getOperand(1) == getDiscriminator() &&
-        areEquivalentAddrDiscriminators(DiscBlend->getOperand(0),
-                                        getAddrDiscriminator(), DL))
-      return true;
-  }
-
-  // If we don't have a non-address discriminator, we don't need a blend in
-  // the first place:  accept the address discriminator as the discriminator.
-  if (getDiscriminator()->isNullValue() &&
-      areEquivalentAddrDiscriminators(getAddrDiscriminator(), Discriminator,
-                                      DL))
-    return true;
-
-  // Otherwise, we don't know.
-  return false;
-}
-
-ConstantPtrAuth *ConstantPtrAuth::getWithSameSchema(Constant *Pointer) const {
-  return get(Pointer, getKey(), getDiscriminator(), getAddrDiscriminator());
-}
-
 ConstantPtrAuth *ConstantPtrAuth::get(Constant *Ptr, ConstantInt *Key,
                                       ConstantInt *Disc, Constant *AddrDisc) {
   Constant *ArgVec[] = {Ptr, Key, Disc, AddrDisc};
   ConstantPtrAuthKeyType MapKey(ArgVec);
   LLVMContextImpl *pImpl = Ptr->getContext().pImpl;
   return pImpl->ConstantPtrAuths.getOrCreate(Ptr->getType(), MapKey);
+}
+
+ConstantPtrAuth *ConstantPtrAuth::getWithSameSchema(Constant *Pointer) const {
+  return get(Pointer, getKey(), getDiscriminator(), getAddrDiscriminator());
 }
 
 ConstantPtrAuth::ConstantPtrAuth(Constant *Ptr, ConstantInt *Key,
@@ -2123,6 +2074,66 @@ Value *ConstantPtrAuth::handleOperandChangeImpl(Value *From, Value *ToV) {
 
   return getContext().pImpl->ConstantPtrAuths.replaceOperandsInPlace(
       Values, this, From, To, NumUpdated, OperandNo);
+}
+
+bool ConstantPtrAuth::isKnownCompatibleWith(const Value *Key,
+                                            const Value *Discriminator,
+                                            const DataLayout &DL) const {
+  // If the keys are different, there's no chance for this to be compatible.
+  if (getKey() != Key)
+    return false;
+
+  // We can have 3 kinds of discriminators:
+  // - simple, integer-only:    `i64 x, ptr null` vs. `i64 x`
+  // - address-only:            `i64 0, ptr p` vs. `ptr p`
+  // - blended address/integer: `i64 x, ptr p` vs. `@llvm.ptrauth.blend(p, x)`
+
+  // If this constant has a simple discriminator (integer, no address), easy:
+  // it's compatible iff the provided full discriminator is also a simple
+  // discriminator, identical to our integer discriminator.
+  if (!hasAddressDiscriminator())
+    return getDiscriminator() == Discriminator;
+
+  // Otherwise, we can isolate address and integer discriminator components.
+  const Value *AddrDiscriminator = nullptr;
+
+  // This constant may or may not have an integer discriminator (instead of 0).
+  if (!getDiscriminator()->isNullValue()) {
+    // If it does, there's an implicit blend.  We need to have a matching blend
+    // intrinsic in the provided full discriminator.
+    if (!match(Discriminator,
+               m_Intrinsic<Intrinsic::ptrauth_blend>(
+                   m_Value(AddrDiscriminator), m_Specific(getDiscriminator()))))
+      return false;
+  } else {
+    // Otherwise, interpret the provided full discriminator as address-only.
+    AddrDiscriminator = Discriminator;
+  }
+
+  // Either way, we can now focus on comparing the address discriminators.
+
+  // Discriminators are i64, so the provided addr disc may be a ptrtoint.
+  if (auto *Cast = dyn_cast<PtrToIntOperator>(AddrDiscriminator))
+    AddrDiscriminator = Cast->getPointerOperand();
+
+  // Beyond that, we're only interested in compatible pointers.
+  if (getAddrDiscriminator()->getType() != AddrDiscriminator->getType())
+    return false;
+
+  // These are often the same constant GEP, making them trivially equivalent.
+  if (getAddrDiscriminator() == AddrDiscriminator)
+    return true;
+
+  // Finally, they may be equivalent base+offset expressions.
+  APInt Off1(DL.getIndexTypeSizeInBits(getAddrDiscriminator()->getType()), 0);
+  auto *Base1 = getAddrDiscriminator()->stripAndAccumulateConstantOffsets(
+      DL, Off1, /*AllowNonInbounds=*/true);
+
+  APInt Off2(DL.getIndexTypeSizeInBits(AddrDiscriminator->getType()), 0);
+  auto *Base2 = AddrDiscriminator->stripAndAccumulateConstantOffsets(
+      DL, Off2, /*AllowNonInbounds=*/true);
+
+  return Base1 == Base2 && Off1 == Off2;
 }
 
 //---- ConstantExpr::get() implementations.

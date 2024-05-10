@@ -3647,10 +3647,10 @@ Error BitcodeReader::parseConstants() {
       if (Record.size() < 4)
         return error("Invalid ptrauth record");
       // Ptr, Key, Disc, AddrDisc
-      V = BitcodeConstant::create(
-        Alloc, CurTy, BitcodeConstant::ConstantPtrAuthOpcode,
-        {(unsigned)Record[0], (unsigned)Record[1], (unsigned)Record[2],
-         (unsigned)Record[3]});
+      V = BitcodeConstant::create(Alloc, CurTy,
+                                  BitcodeConstant::ConstantPtrAuthOpcode,
+                                  {(unsigned)Record[0], (unsigned)Record[1],
+                                   (unsigned)Record[2], (unsigned)Record[3]});
       break;
     }
     }
