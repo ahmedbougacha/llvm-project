@@ -1487,6 +1487,17 @@ bool CompilerInvocation::setDefaultPointerAuthOptions(
       Opts.ObjCMethodListPointer =
           PointerAuthSchema(Key::ASDA, true, Discrimination::Constant,
                             MethodListPointerConstantDiscriminator);
+      Opts.CXXVTablePointers = PointerAuthSchema(
+          Key::ASDA, LangOpts.PointerAuthVTPtrAddressDiscrimination,
+          LangOpts.PointerAuthVTPtrTypeDiscrimination ? Discrimination::Type
+                                                      : Discrimination::None);
+      Opts.CXXTypeInfoVTablePointer =
+          PointerAuthSchema(Key::ASDA, false, Discrimination::None);
+      Opts.CXXVTTVTablePointers =
+          PointerAuthSchema(Key::ASDA, false, Discrimination::None);
+      Opts.CXXVirtualFunctionPointers =
+          Opts.CXXVirtualVariadicFunctionPointers =
+              PointerAuthSchema(Key::ASIA, true, Discrimination::Decl);
     }
     Opts.ReturnAddresses = LangOpts.PointerAuthReturns;
     Opts.AuthTraps = LangOpts.PointerAuthAuthTraps;
