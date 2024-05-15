@@ -26,6 +26,7 @@
 #include "clang/Basic/LangOptions.h"
 #include "clang/Basic/Module.h"
 #include "clang/Basic/NoSanitizeList.h"
+#include "clang/Basic/PointerAuthOptions.h"
 #include "clang/Basic/ProfileList.h"
 #include "clang/Basic/TargetInfo.h"
 #include "clang/Basic/XRayLists.h"
@@ -70,6 +71,7 @@ class Expr;
 class Stmt;
 class StringLiteral;
 class NamedDecl;
+class PointerAuthSchema;
 class ValueDecl;
 class VarDecl;
 class LangOptions;
@@ -609,6 +611,8 @@ private:
   std::pair<std::unique_ptr<CodeGenFunction>, const TopLevelStmtDecl *>
       GlobalTopLevelStmtBlockInFlight;
 
+  llvm::DenseMap<GlobalDecl, uint16_t> PtrAuthDiscriminatorHashes;
+
 public:
   CodeGenModule(ASTContext &C, IntrusiveRefCntPtr<llvm::vfs::FileSystem> FS,
                 const HeaderSearchOptions &headersearchopts,
@@ -938,10 +942,56 @@ public:
   // Return the function body address of the given function.
   llvm::Constant *GetFunctionStart(const ValueDecl *Decl);
 
+  /// Return a function pointer for a reference to the given function.
+  /// This correctly handles weak references, but does not apply a
+  /// pointer signature.
+  llvm::Constant *getRawFunctionPointer(GlobalDecl GD,
+                                        llvm::Type *Ty = nullptr);
+
+  /// Return the ABI-correct function pointer value for a reference
+  /// to the given function.  This will apply a pointer signature if
+  /// necessary, caching the result for the given function.
+  llvm::Constant *getFunctionPointer(GlobalDecl GD, llvm::Type *Ty = nullptr);
+
+  /// Return the ABI-correct function pointer value for a reference
+  /// to the given function.  This will apply a pointer signature if
+  /// necessary, but will only cache the result if \p FD is passed.
+  llvm::Constant *getFunctionPointer(llvm::Constant *pointer,
+                                     QualType functionType,
+                                     GlobalDecl GD = GlobalDecl());
+
+  CGPointerAuthInfo getFunctionPointerAuthInfo(QualType functionType);
+
+  CGPointerAuthInfo getMemberFunctionPointerAuthInfo(QualType functionType);
+
+  CGPointerAuthInfo getPointerAuthInfoForPointeeType(QualType type);
+
+  CGPointerAuthInfo getPointerAuthInfoForType(QualType type);
+
+  llvm::Constant *getConstantSignedPointer(llvm::Constant *pointer,
+                                           const PointerAuthSchema &schema,
+                                           llvm::Constant *storageAddress,
+                                           GlobalDecl schemaDecl,
+                                           QualType schemaType);
+
   llvm::Constant *getConstantSignedPointer(llvm::Constant *pointer,
                                            unsigned key,
                                            llvm::Constant *storageAddress,
                                            llvm::Constant *extraDiscrim);
+
+  llvm::Constant *getConstantSignedPointer(llvm::Constant *Pointer,
+                                           QualType PointeeType);
+
+  llvm::Constant *
+  getPointerAuthOtherDiscriminator(const PointerAuthSchema &schema,
+                                   GlobalDecl schemaDecl, QualType schemaType);
+  uint16_t getPointerAuthDeclDiscriminator(GlobalDecl GD);
+
+  bool isFunctionPointerAuthenticated(QualType FunctionPointerTy,
+                                      const Expr *Key,
+                                      const Expr *Discriminator);
+
+  CGPointerAuthInfo EmitPointerAuthInfo(const RecordDecl *RD);
 
   // Return whether RTTI information should be emitted for this target.
   bool shouldEmitRTTI(bool ForEH = false) {

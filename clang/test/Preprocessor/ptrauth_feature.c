@@ -55,6 +55,16 @@
 // RUN:   -fptrauth-vtable-pointer-type-discrimination | \
 // RUN:   FileCheck %s --check-prefixes=INTRIN,CALLS,RETS,VPTR_ADDR_DISCR,VPTR_TYPE_DISCR,NOINITFINI
 
+// RUN: %clang_cc1 -E %s -triple=aarch64 \
+// RUN:   -fptrauth-intrinsics \
+// RUN:   -fptrauth-calls \
+// RUN:   -fptrauth-returns \
+// RUN:   -fptrauth-vtable-pointer-address-discrimination \
+// RUN:   -fptrauth-vtable-pointer-type-discrimination \
+// RUN:   -fptrauth-function-pointer-type-discrimination | \
+// RUN:   FileCheck %s --check-prefixes=INTRIN,CALLS,RETS,VPTR_ADDR_DISCR,VPTR_TYPE_DISCR,NOINITFINI,FUNC
+
+
 #if __has_feature(ptrauth_intrinsics)
 // INTRIN: has_ptrauth_intrinsics
 void has_ptrauth_intrinsics() {}
@@ -110,4 +120,20 @@ void has_ptrauth_init_fini() {}
 #else
 // NOINITFINI: no_ptrauth_init_fini
 void no_ptrauth_init_fini() {}
+#endif
+
+#include <ptrauth.h>
+
+#if __has_feature(ptrauth_function_pointer_type_discrimination)
+// FUNC: has_ptrauth_function_pointer_type_discrimination
+int has_ptrauth_function_pointer_type_discrimination() {
+// FUNC: return __builtin_ptrauth_type_discriminator(void (*)(void))
+  return ptrauth_function_pointer_type_discriminator(void (*)(void));
+}
+#else
+// NOFUNC: no_ptrauth_function_pointer_type_discrimination
+int no_ptrauth_function_pointer_type_discrimination() {
+// NOFUNC: return ((ptrauth_extra_data_t)0)
+  return ptrauth_function_pointer_type_discriminator(void(*)(void));
+}
 #endif
