@@ -4402,6 +4402,10 @@ defm aarch64_jump_table_hardening: OptInCC1FFlag<"aarch64-jump-table-hardening",
 }
 
 let Group = f_Group in {
+  def fbranch_target_identification : Flag<["-"], "fbranch-target-identification">,
+      HelpText<"Emit branch target identification instructions for indirect branch destinations">;
+  def fno_branch_target_identification : Flag<["-"], "fno-branch-target-identification">;
+
   def fptrauth_objc_isa_mode : Joined<["-"], "fptrauth-objc-isa-mode=">,
       Visibility<[ClangOption, CC1Option, CC1AsOption]>,
       HelpText<"Authentication mode for ObjC isa field. Full auth if unspecified">, Values<"strip,sign-and-strip,sign-and-auth">;

@@ -1903,6 +1903,10 @@ void Clang::AddAArch64TargetArgs(const ArgList &Args,
                     options::OPT_fno_ptrauth_init_fini_address_discrimination);
   Args.addOptInFlag(CmdArgs, options::OPT_faarch64_jump_table_hardening,
                     options::OPT_fno_aarch64_jump_table_hardening);
+
+  if (Args.hasArg(options::OPT_fbranch_target_identification,
+                  options::OPT_fno_branch_target_identification, false))
+    CmdArgs.push_back("-mbranch-target-enforce");
 }
 
 void Clang::AddLoongArchTargetArgs(const ArgList &Args,

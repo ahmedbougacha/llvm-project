@@ -17,6 +17,8 @@
 // RUN: %clang_cc1 -triple arm64e-apple-ios  -faarch64-jump-table-hardening -emit-llvm %s -o - | FileCheck %s --check-prefixes=ALL,JMPTBL
 // RUN: %clang_cc1 -triple aarch64-linux-gnu -faarch64-jump-table-hardening -emit-llvm %s -o - | FileCheck %s --check-prefixes=ALL,JMPTBL
 
+// RUN: %clang_cc1 -triple arm64e-apple-ios  -mbranch-target-enforce -emit-llvm %s -o - | FileCheck %s --check-prefixes=ALL,BTI
+
 // ALL: define {{(dso_local )?}}void @test() #0
 void test() {
 }
@@ -31,4 +33,7 @@ void test() {
 
 // JMPTBL: attributes #0 = {{{.*}} "aarch64-jump-table-hardening" {{.*}}}
 
+// BTI: !1 = !{i32 8, !"branch-target-enforcement", i32 1}
+
 // OFF-NOT: attributes {{.*}} "ptrauth-
+// OFF-NOT: !"branch-target-enforcement"
