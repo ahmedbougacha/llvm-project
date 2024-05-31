@@ -295,6 +295,18 @@ are not stored to (and reloaded from) memory.
 Some function attributes are used to describe other pointer authentication
 operations that are not otherwise explicitly expressed in IR.
 
+#### ``ptrauth-calls``
+
+``ptrauth-calls`` specifies that calls emitted in this function should be
+authenticated according to the platform ABI.
+
+Calls represented by ``call``/``invoke`` instructions in IR are not affected by
+this attribute, as they should already be annotated with the
+[``ptrauth`` operand bundle](#operand-bundle).
+
+The ``ptrauth-calls`` attribute only describes calls emitted by the backend,
+as part of target-specific lowering (e.g., runtime calls for TLS accesses).
+
 #### ``ptrauth-indirect-gotos``
 
 ``ptrauth-indirect-gotos`` specifies that indirect gotos in this function
