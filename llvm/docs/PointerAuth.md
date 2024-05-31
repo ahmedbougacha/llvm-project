@@ -295,6 +295,20 @@ are not stored to (and reloaded from) memory.
 Some function attributes are used to describe other pointer authentication
 operations that are not otherwise explicitly expressed in IR.
 
+#### ``ptrauth-returns``
+
+``ptrauth-returns`` specifies that returns from functions should be
+authenticated, and that saved return addresses should be signed.
+
+Note that this describes the execution environment that can be assumed by
+this function, not the semantics of return instructions in this function alone.
+
+The semantics of
+[``llvm.returnaddress``](https://llvm.org/docs/LangRef.html#llvm-returnaddress-intrinsic)
+are not changed (it still returns a raw, unauthenticated, return address), so
+it might require an implicit strip/authenticate operation.  This applies to
+return addresses stored in deeper stack frames.
+
 #### ``ptrauth-calls``
 
 ``ptrauth-calls`` specifies that calls emitted in this function should be
