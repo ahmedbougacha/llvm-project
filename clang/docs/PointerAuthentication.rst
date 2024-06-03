@@ -741,6 +741,18 @@ type.  Implementations are not required to make all bits of the result equally
 significant; in particular, some implementations are known to not leave
 meaningful data in the low bits.
 
+Standard ``__ptrauth`` Qualifiers
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+``<ptrauth.h>`` additionally provides several macros which expand to
+``__ptrauth`` qualifiers for common ABI situations.
+
+For convenience, these macros expand to nothing when pointer authentication is
+disabled.
+
+These macros can be found in the header; some details of these macros may be
+unstable or implementation-specific.
+
 
 
 Theory of Operation
