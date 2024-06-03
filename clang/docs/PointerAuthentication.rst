@@ -233,6 +233,31 @@ not significantly weaken the mitigation, since collisions remain uncommon.
 The algorithm for blending a constant discriminator with a storage address is
 implementation-defined.
 
+.. _Authentication Options:
+
+Authentication Options
+~~~~~~~~~~~~~~~~~~~~~~
+
+It is possible to tweak the behaviour of pointer authentication using the
+`options` argument to the ``__ptrauth`` attribute. These options are specified
+through a string literal containing a comma-separated list of options. Current
+options are
+
+- authentication mode: ``strip``, ``sign-and-strip``, ``sign-and-auth``. These
+  control whether authentication codes are ignored completely (``strip``),
+  whether values are signed but not authenticated (``sign-and-strip``), or the
+  default of full authentication (``sign-and-auth``).
+
+- ``authenticates-null-values``: Enables full signing and authentication of
+  null values. The default behaviour of pointer authentication is to not sign
+  or authenticate null values. This option ensures that all values, including
+  null values, will always be signed and authenticated.
+
+- ``isa-pointer``: This is used to indicate that the target value is an
+  Objective-C isa pointer, and needs to mask out objective-c tag bits prior to
+  signing or authenticating the value.
+
+
 .. _Signing schemas:
 
 Signing Schemas
@@ -404,7 +429,7 @@ purposes they are all equivalent to ``ptrauth_calls``.
 __ptrauth Qualifier
 ^^^^^^^^^^^^^^^^^^^
 
-``__ptrauth(key, address, discriminator)`` is an extended type
+``__ptrauth(key, address, discriminator [, options] )`` is an extended type
 qualifier which causes so-qualified objects to hold pointers signed using the
 specified schema rather than the default schema for such types.
 
@@ -412,6 +437,11 @@ In the current implementation in Clang, the qualified type must be a C pointer
 type, either to a function or to an object.  It currently cannot be an
 Objective-C pointer type, a C++ reference type, or a block pointer type; these
 restrictions may be lifted in the future.
+
+The current implementation in Clang is known to not provide adequate safety
+guarantees against the creation of `signing oracles`_ when assigning data
+pointers to ``__ptrauth``-qualified gl-values.  See the section on `safe
+derivation`_ for more information.
 
 The qualifier's operands are as follows:
 
@@ -423,7 +453,13 @@ The qualifier's operands are as follows:
 
 - ``discriminator`` - a constant discriminator; must be a constant expression
 
+- ``options`` - an optional list of authentication behaviour options; must be
+  a string literal
+
 See `Discriminators`_ for more information about discriminators.
+
+See :ref:`authentication options<Authentication options>` for more information
+about options.
 
 Currently the operands must be constant-evaluable even within templates. In the
 future this restriction may be lifted to allow value-dependent expressions as
@@ -446,6 +482,69 @@ a discriminator determined as follows:
 - if ``address`` is 1 and ``discriminator`` is non-zero, then the discriminator
   is ``ptrauth_blend_discriminator(&x, discriminator)``; see
   `ptrauth_blend_discriminator`_.
+
+__ptrauth_restricted_intptr Qualifier
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+This is a variant of the ``__ptrauth`` qualifier, that applies to pointer sized
+integers.  See the documentation for ``__ptrauth qualifier``.
+
+This feature exists to support older APIs that use [u]intptrs to hold opaque
+pointer types.
+
+Care must be taken to avoid using the signature bit components of the signed
+integers or subsequent authentication of the signed value may fail.
+
+Note: When applied to a global initialiser a signed uintptr can only be
+initialised with the value 0 or a global address.
+
+Non-triviality From Address Diversity
++++++++++++++++++++++++++++++++++++++
+
+Address diversity must impose additional restrictions in order to allow the
+implementation to correctly copy values.  In C++, a type qualified with address
+diversity is treated like a class type with non-trivial copy/move constructors
+and assignment operators, with the usual effect on containing classes and
+unions.  C does not have a standard concept of non-triviality, and so we must
+describe the basic rules here, with the intention of imitating the emergent
+rules of C++:
+
+- A type may be **non-trivial to copy**.
+
+- A type may also be **illegal to copy**.  Types that are illegal to copy are
+  always non-trivial to copy.
+
+- A type may also be **address-sensitive**.
+
+- A type qualified with a ``ptrauth`` qualifier that requires address diversity
+  is non-trivial to copy and address-sensitive.
+
+- An array type is illegal to copy, non-trivial to copy, or address-sensitive
+  if its element type is illegal to copy, non-trivial to copy, or
+  address-sensitive, respectively.
+
+- A struct type is illegal to copy, non-trivial to copy, or address-sensitive
+  if it has a field whose type is illegal to copy, non-trivial to copy, or
+  address-sensitive, respectively.
+
+- A union type is both illegal and non-trivial to copy if it has a field whose
+  type is non-trivial or illegal to copy.
+
+- A union type is address-sensitive if it has a field whose type is
+  address-sensitive.
+
+- A program is ill-formed if it uses a type that is illegal to copy as
+  a function parameter, argument, or return type.
+
+- A program is ill-formed if an expression requires a type to be copied that is
+  illegal to copy.
+
+- Otherwise, copying a type that is non-trivial to copy correctly copies its
+  subobjects.
+
+- Types that are address-sensitive must always be passed and returned
+  indirectly. Thus, changing the address-sensitivity of a type may be
+  ABI-breaking even if its size and alignment do not change.
 
 ``<ptrauth.h>``
 ~~~~~~~~~~~~~~~
