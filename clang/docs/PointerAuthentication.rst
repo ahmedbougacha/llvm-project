@@ -52,9 +52,8 @@ This document serves four purposes:
   ways in which programmers can strengthen its protections (including
   recommendations for language implementors).
 
-- It will eventually document the language ABIs currently used for C, C++,
-  Objective-C, and Swift on arm64e, although these are not yet stable on any
-  target.
+- It documents the language ABIs currently used for C, C++, Objective-C, and
+  Swift on arm64e, although these are not yet stable on any target.
 
 Basic Concepts
 --------------
@@ -263,11 +262,120 @@ inspecting information stored along with the pointer.  See the section on
 Language Features
 -----------------
 
-There is currently one main pointer authentication language feature:
+There are three levels of the pointer authentication language feature:
 
-- The language provides the ``<ptrauth.h>`` intrinsic interface for manually
-  signing and authenticating pointers in code.  These can be used in
+- The language implementation automatically signs and authenticates function
+  pointers (and certain data pointers) across a variety of standard situations,
+  including return addresses, function pointers, and C++ virtual functions. The
+  intent is for all pointers to code in program memory to be signed in some way
+  and for all branches to code in program text to authenticate those
+  signatures.
+
+- The language also provides extensions to override the default rules used by
+  the language implementation.  For example, the ``__ptrauth`` type qualifier
+  can be used to change how pointers are signed when they are stored in
+  a particular variable or field; this provides much stronger protection than
+  is guaranteed by the default rules for C function and data pointers.
+
+- Finally, the language provides the ``<ptrauth.h>`` intrinsic interface for
+  manually signing and authenticating pointers in code.  These can be used in
   circumstances where very specific behavior is required.
+
+Language Implementation
+~~~~~~~~~~~~~~~~~~~~~~~
+
+For the most part, pointer authentication is an unobserved detail of the
+implementation of the programming language.  Any element of the language
+implementation that would perform an indirect branch to a pointer is implicitly
+altered so that the pointer is signed when first constructed and authenticated
+when the branch is performed.  This includes:
+
+- indirect-call features in the programming language, such as C function
+  pointers, C++ virtual functions, C++ member function pointers, the "blocks"
+  C extension, and so on;
+
+- returning from a function, no matter how it is called; and
+
+- indirect calls introduced by the implementation, such as branches through the
+  global offset table (GOT) used to implement direct calls to functions defined
+  outside of the current shared object.
+
+For more information about this, see the `Language ABI`_ section.
+
+However, some aspects of the implementation are observable by the programmer or
+otherwise require special notice.
+
+C Data Pointers
+^^^^^^^^^^^^^^^
+
+The current implementation in Clang does not sign pointers to ordinary data by
+default. For a partial explanation of the reasoning behind this, see the
+`Theory of Operation`_ section.
+
+A specific data pointer which is more security-sensitive than most can be
+signed using the `__ptrauth qualifier`_ or using the ``<ptrauth.h>``
+intrinsics.
+
+C Function Pointers
+^^^^^^^^^^^^^^^^^^^
+
+The C standard imposes restrictions on the representation and semantics of
+function pointer types which make it difficult to achieve satisfactory
+signature diversity in the default language rules.  See `Attacks on pointer
+authentication`_ for more information about signature diversity.  Programmers
+should strongly consider using the ``__ptrauth`` qualifier to improve the
+protections for important function pointers, such as the components of of
+a hand-rolled "v-table"; see the section on the `__ptrauth qualifier`_ for
+details.
+
+The value of a pointer to a C function includes a signature, even when the
+value is cast to a non-function-pointer type like ``void*`` or ``intptr_t``. On
+implementations that use high bits to store the signature, this means that
+relational comparisons and hashes will vary according to the exact signature
+value, which is likely to change between executions of a program.  In some
+implementations, it may also vary based on the exact function pointer type.
+
+Null Pointers
+^^^^^^^^^^^^^
+
+In principle, an implementation could derive the signed null pointer value
+simply by applying the standard signing algorithm to the raw null pointer
+value. However, for likely signing algorithms, this would mean that the signed
+null pointer value would no longer be statically known, which would have many
+negative consequences.  For one, it would become substantially more expensive
+to emit null pointer values or to perform null-pointer checks.  For another,
+the pervasive (even if technically unportable) assumption that null pointers
+are bitwise zero would be invalidated, making it substantially more difficult
+to adopt pointer authentication, as well as weakening common optimizations for
+zero-initialized memory such as the use of ``.bzz`` sections.  Therefore it is
+beneficial to treat null pointers specially by giving them their usual
+representation.  On AArch64, this requires additional code when working with
+possibly-null pointers, such as when copying a pointer field that has been
+signed with address diversity.
+
+Return Addresses and Frame Pointers
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The current implementation in Clang implicitly signs both return addresses and
+frame pointers.  While these values are technically implementation details of
+a function, there are some important libraries and development tools which rely
+on manually walking the chain of stack frames.  These tools must be updated to
+correctly account for pointer authentication, either by stripping signatures
+(if security is not important for the tool, e.g. if it is capturing a stack
+trace during a crash) or properly authenticating them.  More information about
+how these values are signed is available in the `Language ABI`_ section.
+
+C++ Virtual Functions
+^^^^^^^^^^^^^^^^^^^^^
+
+The current implementation in Clang signs virtual function pointers with
+a discriminator derived from the full signature of the overridden method,
+including the method name and parameter types.  It is possible to write C++
+code that relies on v-table layout remaining constant despite changes to
+a method signature; for example, a parameter might be a ``typedef`` that
+resolves to a different type based on a build setting.  Such code violates
+C++'s One Definition Rule (ODR), but that violation is not normally detected;
+however, pointer authentication will detect it.
 
 
 Language Extensions
@@ -282,6 +390,16 @@ a number of different tests.
 - ``__has_feature(ptrauth_intrinsics)`` is true if ``<ptrauth.h>`` provides its
   normal interface.  This may be true even on targets where pointer
   authentication is not enabled by default.
+
+- ``__has_feature(ptrauth_returns)`` is true if the target uses pointer
+  authentication to protect return addresses.
+
+- ``__has_feature(ptrauth_calls)`` is true if the target uses pointer
+  authentication to protect indirect branches.  This implies
+  ``__has_feature(ptrauth_returns)`` and ``__has_feature(ptrauth_intrinsics)``.
+
+Clang provides several other tests only for historical purposes; for current
+purposes they are all equivalent to ``ptrauth_calls``.
 
 __ptrauth Qualifier
 ^^^^^^^^^^^^^^^^^^^
@@ -965,7 +1083,7 @@ pointer authentication.
   use of :ref:`relative addresses` in global data becomes insecure.
 
 - If an attacker can remap read-only program sections to be writable, then it
-  is unsafe to use unsigned pointers in global offset tables.
+  is unsafe to use unsigned pointers in `global offset tables`_.
 
 Remapping memory in this way often requires the attacker to have already
 substantively subverted the control flow of the process.  Nonetheless, if the
