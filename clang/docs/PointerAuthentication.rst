@@ -459,6 +459,27 @@ computations may still be attackable.  In the future, Clang should be enhanced
 to guaranteed non-attackability if these expressions are
 :ref:`safely-derived<Safe derivation>`.
 
+``ptrauth_auth_function``
+^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. code-block:: c
+
+  ptrauth_auth_function(pointer, key, discriminator)
+
+Authenticate that ``pointer`` is signed with ``key`` and ``discriminator`` and
+re-sign it to the standard schema for a function pointer of its type.
+
+``pointer`` must have function pointer type.  The result will have the same
+type as ``pointer``.  This operation is not required to have the same behavior
+on a null pointer that the language implementation would.
+
+This operation makes the same attackability guarantees as
+``ptrauth_auth_and_resign``.
+
+If this operation appears syntactically as the function operand of a call,
+Clang guarantees that the call will directly authenticate the function value
+using the given schema rather than re-signing to the standard schema.
+
 ``ptrauth_auth_data``
 ^^^^^^^^^^^^^^^^^^^^^
 
