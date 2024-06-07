@@ -286,8 +286,8 @@ private:
   /// into the ptrauth call bundle:
   /// - call(ptrauth.resign(p)), ["ptrauth"()] ->  call p, ["ptrauth"()]
   /// - call(ptrauth.sign(p)),   ["ptrauth"()] ->  call p
-  /// as long as the key/discriminator are the same in sign and auth-bundle,
-  /// and we don't change the key in the bundle (to a potentially-invalid key.)
+  /// - call(ptrauth.auth(p))                  ->  call p, ["ptrauth"()]
+  /// as long as the key/discriminator are the same in sign and auth-bundle.
   Instruction *foldPtrAuthIntrinsicCallee(CallBase &Call);
 
   // Return (a, b) if (LHS, RHS) is known to be (a, b) or (b, a).
