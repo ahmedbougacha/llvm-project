@@ -3948,10 +3948,6 @@ Instruction *InstCombinerImpl::foldPtrAuthIntrinsicCallee(CallBase &Call) {
         II->getOperand(4) != PtrAuthBundleOrNone->Inputs[1])
       return nullptr;
 
-    // Don't change the key used in the call; we don't know what's valid.
-    if (II->getOperand(1) != PtrAuthBundleOrNone->Inputs[0])
-      return nullptr;
-
     Value *NewBundleOps[] = {II->getOperand(1), II->getOperand(2)};
     NewBundles.emplace_back("ptrauth", NewBundleOps);
     NewCallee = II->getOperand(0);
@@ -3966,6 +3962,16 @@ Instruction *InstCombinerImpl::foldPtrAuthIntrinsicCallee(CallBase &Call) {
         II->getOperand(1) != PtrAuthBundleOrNone->Inputs[0] ||
         II->getOperand(2) != PtrAuthBundleOrNone->Inputs[1])
       return nullptr;
+    NewCallee = II->getOperand(0);
+    break;
+  }
+
+  // call(ptrauth.auth(p)) ->  call p, ["ptrauth"()]
+  case Intrinsic::ptrauth_auth: {
+    if (PtrAuthBundleOrNone)
+      return nullptr;
+    Value *NewBundleOps[] = {II->getOperand(1), II->getOperand(2)};
+    NewBundles.emplace_back("ptrauth", NewBundleOps);
     NewCallee = II->getOperand(0);
     break;
   }
