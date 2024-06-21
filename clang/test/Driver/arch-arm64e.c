@@ -8,6 +8,7 @@
 // NONE-NOT: "-fptrauth-indirect-gotos"
 // NONE-NOT: "-fptrauth-auth-traps"
 // NONE-NOT: "-mbranch-target-enforce"
+// NONE-NOT: "-fptrauth-soft"
 
 // RUN: %clang -target arm64-apple-ios15 -fptrauth-calls -c %s -### 2>&1 | FileCheck %s --check-prefix CALL
 // CALL: "-cc1"{{.*}} {{.*}} "-fptrauth-calls"
@@ -26,6 +27,9 @@
 
 // RUN: %clang -target arm64-apple-ios15 -fbranch-target-identification -c %s -### 2>&1 | FileCheck %s --check-prefix BTI
 // BTI: "-cc1"{{.*}} {{.*}} "-mbranch-target-enforce"
+
+// RUN: %clang -target arm64-apple-ios -fptrauth-soft -c %s -### 2>&1 | FileCheck %s --check-prefix SOFT
+// SOFT: "-cc1"{{.*}} {{.*}} "-fptrauth-soft"
 
 
 // Check the arm64e defaults.

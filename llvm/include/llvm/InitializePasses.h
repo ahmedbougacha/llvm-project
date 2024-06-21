@@ -289,6 +289,7 @@ void initializeSingleLoopExtractorPass(PassRegistry &);
 void initializeSinkingLegacyPassPass(PassRegistry &);
 void initializeSjLjEHPreparePass(PassRegistry &);
 void initializeSlotIndexesWrapperPassPass(PassRegistry &);
+void initializeSoftPointerAuthLegacyPassPass(PassRegistry&);
 void initializeSpeculativeExecutionLegacyPassPass(PassRegistry &);
 void initializeSpillPlacementWrapperLegacyPass(PassRegistry &);
 void initializeStackColoringLegacyPass(PassRegistry &);

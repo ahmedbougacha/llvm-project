@@ -4421,6 +4421,11 @@ let Group = f_Group in {
     HelpText<"Enable Pointer Authentication kernel ABI version">;
   def fno_ptrauth_kernel_abi_version : Flag<["-"], "fno-ptrauth-kernel-abi-version">,
     HelpText<"Disable Pointer Authentication kernel ABI versioning">;
+
+  def fptrauth_soft : Flag<["-"], "fptrauth-soft">,
+      Visibility<[ClangOption, CC1Option, CC1AsOption]>,
+      HelpText<"Enable software lowering of pointer authentication">;
+  def fno_ptrauth_soft : Flag<["-"], "fno-ptrauth-soft">;
 }
 
 def fenable_matrix : Flag<["-"], "fenable-matrix">, Group<f_Group>,
