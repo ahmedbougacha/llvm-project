@@ -1554,6 +1554,17 @@ void CompilerInvocation::setDefaultPointerAuthOptions(
     Opts.CXXMemberFunctionPointers =
         PointerAuthSchema(Key::ASIA, false, Discrimination::Type);
 
+    Opts.BlockInvocationFunctionPointers =
+        PointerAuthSchema(Key::ASIA, true, Discrimination::None);
+    Opts.BlockHelperFunctionPointers =
+        PointerAuthSchema(Key::ASIA, true, Discrimination::None);
+    Opts.BlockByrefHelperFunctionPointers =
+        PointerAuthSchema(Key::ASIA, true, Discrimination::None);
+    if (LangOpts.PointerAuthBlockDescriptorPointers)
+      Opts.BlockDescriptorPointers =
+          PointerAuthSchema(Key::ASDA, true, Discrimination::Constant,
+                            BlockDescriptorConstantDiscriminator);
+
     if (LangOpts.PointerAuthInitFini) {
       Opts.InitFiniPointers = PointerAuthSchema(
           Key::ASIA, LangOpts.PointerAuthInitFiniAddressDiscrimination,
@@ -3518,6 +3529,9 @@ static void GeneratePointerAuthArgs(const LangOptions &Opts,
     GenerateArg(Consumer, OPT_fptrauth_type_info_vtable_pointer_discrimination);
   if (Opts.PointerAuthFunctionTypeDiscrimination)
     GenerateArg(Consumer, OPT_fptrauth_function_pointer_type_discrimination);
+  if (Opts.PointerAuthBlockDescriptorPointers)
+    GenerateArg(Consumer, OPT_fptrauth_block_descriptor_pointers);
+
   if (Opts.PointerAuthInitFini)
     GenerateArg(Consumer, OPT_fptrauth_init_fini);
   if (Opts.PointerAuthInitFiniAddressDiscrimination)
@@ -3550,6 +3564,9 @@ static void ParsePointerAuthArgs(LangOptions &Opts, ArgList &Args,
       Args.hasArg(OPT_fptrauth_type_info_vtable_pointer_discrimination);
   Opts.PointerAuthFunctionTypeDiscrimination =
       Args.hasArg(OPT_fptrauth_function_pointer_type_discrimination);
+  Opts.PointerAuthBlockDescriptorPointers =
+      Args.hasArg(OPT_fptrauth_block_descriptor_pointers);
+
   Opts.PointerAuthInitFini = Args.hasArg(OPT_fptrauth_init_fini);
   Opts.PointerAuthInitFiniAddressDiscrimination =
       Args.hasArg(OPT_fptrauth_init_fini_address_discrimination);

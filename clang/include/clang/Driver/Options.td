@@ -4386,6 +4386,8 @@ defm ptrauth_type_info_vtable_pointer_discrimination :
   OptInCC1FFlag<"ptrauth-type-info-vtable-pointer-discrimination", "Enable type and address discrimination of vtable pointer of std::type_info">;
 defm ptrauth_function_pointer_type_discrimination : OptInCC1FFlag<"ptrauth-function-pointer-type-discrimination",
   "Enable type discrimination on C function pointers">;
+defm ptrauth_block_descriptor_pointers : OptInCC1FFlag<"ptrauth-block-descriptor-pointers",
+  "Enable signing block descriptor pointers">;
 defm ptrauth_indirect_gotos : OptInCC1FFlag<"ptrauth-indirect-gotos",
   "Enable signing and authentication of indirect goto targets">;
 defm ptrauth_init_fini : OptInCC1FFlag<"ptrauth-init-fini", "Enable signing of function pointers in init/fini arrays">;

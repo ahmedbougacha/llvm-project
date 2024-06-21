@@ -29,6 +29,10 @@ constexpr uint16_t InitFiniPointerConstantDiscriminator = 0xD9D4;
 
 constexpr unsigned PointerAuthKeyNone = -1;
 
+/// Constant discriminator to be used with block descriptor pointers. The value
+/// is ptrauth_string_discriminator("block_descriptor")
+constexpr uint16_t BlockDescriptorConstantDiscriminator = 0xC0BB;
+
 /// Constant discriminator for std::type_info vtable pointers: 0xB1EA/45546
 /// The value is ptrauth_string_discriminator("_ZTVSt9type_info"), i.e.,
 /// the vtable type discriminator for classes derived from std::type_info.
@@ -199,6 +203,18 @@ struct PointerAuthOptions {
 
   /// The ABI for C++ member function pointers.
   PointerAuthSchema CXXMemberFunctionPointers;
+
+  /// The ABI for block invocation function pointers.
+  PointerAuthSchema BlockInvocationFunctionPointers;
+
+  /// The ABI for block object copy/destroy function pointers.
+  PointerAuthSchema BlockHelperFunctionPointers;
+
+  /// The ABI for __block variable copy/destroy function pointers.
+  PointerAuthSchema BlockByrefHelperFunctionPointers;
+
+  /// The ABI for pointers to block descriptors.
+  PointerAuthSchema BlockDescriptorPointers;
 
   /// The ABI for function addresses in .init_array and .fini_array
   PointerAuthSchema InitFiniPointers;
