@@ -108,7 +108,8 @@ CXXRecordDecl::DefinitionData::DefinitionData(CXXRecordDecl *D)
       ImplicitCopyAssignmentHasConstParam(true),
       HasDeclaredCopyConstructorWithConstParam(false),
       HasDeclaredCopyAssignmentWithConstParam(false),
-      IsAnyDestructorNoReturn(false), IsHLSLIntangible(false), IsLambda(false),
+      IsAnyDestructorNoReturn(false), IsHLSLIntangible(false),
+      HasSignedClassInHierarchy(false), IsLambda(false),
       IsParsingBaseSpecifiers(false), ComputedVisibleConversions(false),
       HasODRHash(false), Definition(D) {}
 
@@ -440,6 +441,9 @@ CXXRecordDecl::setBases(CXXBaseSpecifier const * const *Bases,
     //   B&', 'const volatile B&', or 'B' [...]
     if (!BaseClassDecl->hasCopyAssignmentWithConstParam())
       data().ImplicitCopyAssignmentHasConstParam = false;
+
+    if (BaseClassDecl->hasSignedClassInHierarchy())
+      setHasSignedClassInHierarchy();
 
     // A class has an Objective-C object member if... or any of its bases
     // has an Objective-C object member.

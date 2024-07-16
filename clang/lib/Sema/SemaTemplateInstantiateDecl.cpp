@@ -646,6 +646,26 @@ static void instantiateDependentSYCLKernelAttr(
   New->addAttr(Attr.clone(S.getASTContext()));
 }
 
+static void instantiatePointerAuthStructAttr(
+    Sema &S, const MultiLevelTemplateArgumentList &TemplateArgs,
+    const PointerAuthStructAttr &Attr, Decl *New) {
+  EnterExpressionEvaluationContext Unevaluated(
+      S, Sema::ExpressionEvaluationContext::ConstantEvaluated);
+
+  Expr *Key, *Disc;
+  ExprResult Result = S.SubstExpr(Attr.getKey(), TemplateArgs);
+  if (Result.isInvalid())
+    return;
+  Key = Result.getAs<Expr>();
+
+  Result = S.SubstExpr(Attr.getDiscriminator(), TemplateArgs);
+  if (Result.isInvalid())
+    return;
+  Disc = Result.getAs<Expr>();
+
+  S.addPointerAuthStructAttr(New, Attr, Key, Disc);
+}
+
 /// Determine whether the attribute A might be relevant to the declaration D.
 /// If not, we can skip instantiating it. The attribute may or may not have
 /// been instantiated yet.
@@ -875,6 +895,12 @@ void Sema::InstantiateAttrs(const MultiLevelTemplateArgumentList &TemplateArgs,
     if (auto *A = dyn_cast<CUDAGridConstantAttr>(TmplAttr)) {
       if (!New->hasAttr<CUDAGridConstantAttr>())
         New->addAttr(A->clone(Context));
+      continue;
+    }
+
+    if (auto *PointerAuthStruct = dyn_cast<PointerAuthStructAttr>(TmplAttr)) {
+      instantiatePointerAuthStructAttr(*this, TemplateArgs, *PointerAuthStruct,
+                                       New);
       continue;
     }
 

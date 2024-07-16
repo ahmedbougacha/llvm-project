@@ -2227,7 +2227,7 @@ ConstantLValueEmitter::tryEmitBase(const APValue::LValueBase &base) {
 
       CGPointerAuthInfo AuthInfo;
 
-      if (EnablePtrAuthFunctionTypeDiscrimination)
+      if (IsFunction && EnablePtrAuthFunctionTypeDiscrimination)
         AuthInfo = CGM.getFunctionPointerAuthInfo(DestType);
       else {
         // FIXME: getPointerAuthInfoForType should be able to return the pointer
@@ -2262,11 +2262,12 @@ ConstantLValueEmitter::tryEmitBase(const APValue::LValueBase &base) {
       // We can never refer to a variable with local storage.
       if (!VD->hasLocalStorage()) {
         if (VD->isFileVarDecl() || VD->hasExternalStorage())
-          return CGM.GetAddrOfGlobalVar(VD);
+          return PtrAuthSign(CGM.GetAddrOfGlobalVar(VD), false);
 
         if (VD->isLocalVarDecl()) {
-          return CGM.getOrCreateStaticVarDecl(
+          llvm::Constant *C = CGM.getOrCreateStaticVarDecl(
               *VD, CGM.getLLVMLinkageVarDefinition(VD));
+          return PtrAuthSign(C, false);
         }
       }
     }
