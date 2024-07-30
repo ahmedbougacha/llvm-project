@@ -2542,7 +2542,7 @@ bool Qualifiers::isEmptyWhenPrinted(const PrintingPolicy &Policy) const {
     if (!(lifetime == Qualifiers::OCL_Strong && Policy.SuppressStrongLifetime))
       return false;
 
-  if (auto PointerAuth = getPointerAuth())
+  if (PointerAuthQualifier PointerAuth = getPointerAuth())
     if (!PointerAuth.isEmptyWhenPrinted(Policy))
       return false;
 
@@ -2652,7 +2652,7 @@ void Qualifiers::print(raw_ostream &OS, const PrintingPolicy& Policy,
     }
   }
 
-  if (auto PointerAuth = getPointerAuth()) {
+  if (PointerAuthQualifier PointerAuth = getPointerAuth()) {
     if (addSpace)
       OS << ' ';
     addSpace = true;
