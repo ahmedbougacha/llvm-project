@@ -90,6 +90,7 @@ CGPointerAuthInfo CodeGenModule::getFunctionPointerAuthInfo(QualType T) {
                            Discriminator);
 }
 
+
 llvm::Value *
 CodeGenFunction::EmitPointerAuthBlendDiscriminator(llvm::Value *StorageAddress,
                                                    llvm::Value *Discriminator) {
@@ -275,6 +276,48 @@ llvm::Value *CodeGenFunction::EmitPointerAuthUnqualify(
                                IsKnownNonNull);
 }
 
+Address CodeGenFunction::mergeAddressesInConditionalExpr(
+    Address LHS, Address RHS, llvm::BasicBlock *LHSBlock,
+    llvm::BasicBlock *RHSBlock, llvm::BasicBlock *MergeBlock,
+    QualType MergedType) {
+  CGPointerAuthInfo LHSInfo = LHS.getPointerAuthInfo();
+  CGPointerAuthInfo RHSInfo = RHS.getPointerAuthInfo();
+
+  if (LHSInfo || RHSInfo) {
+    if (LHSInfo != RHSInfo || LHS.getOffset() != RHS.getOffset() ||
+        LHS.getBasePointer()->getType() != RHS.getBasePointer()->getType()) {
+      // If the LHS and RHS have different signing information, offsets, or base
+      // pointer types, resign both sides and clear out the offsets.
+      CGPointerAuthInfo NewInfo =
+          CGM.getPointerAuthInfoForPointeeType(MergedType);
+      LHSBlock->getTerminator()->eraseFromParent();
+      Builder.SetInsertPoint(LHSBlock);
+      LHS = LHS.getResignedAddress(NewInfo, *this);
+      Builder.CreateBr(MergeBlock);
+      LHSBlock = Builder.GetInsertBlock();
+      RHSBlock->getTerminator()->eraseFromParent();
+      Builder.SetInsertPoint(RHSBlock);
+      RHS = RHS.getResignedAddress(NewInfo, *this);
+      Builder.CreateBr(MergeBlock);
+      RHSBlock = Builder.GetInsertBlock();
+    }
+
+    assert(LHS.getPointerAuthInfo() == RHS.getPointerAuthInfo() &&
+           LHS.getOffset() == RHS.getOffset() &&
+           LHS.getBasePointer()->getType() == RHS.getBasePointer()->getType() &&
+           "lhs and rhs must have the same signing information, offsets, and "
+           "base pointer types");
+  }
+
+  Builder.SetInsertPoint(MergeBlock);
+  llvm::PHINode *PtrPhi = Builder.CreatePHI(LHS.getType(), 2, "cond");
+  PtrPhi->addIncoming(LHS.getBasePointer(), LHSBlock);
+  PtrPhi->addIncoming(RHS.getBasePointer(), RHSBlock);
+  LHS.replaceBasePointer(PtrPhi);
+  LHS.setAlignment(std::min(LHS.getAlignment(), RHS.getAlignment()));
+  return LHS;
+}
+
 static bool isZeroConstant(const llvm::Value *Value) {
   if (const auto *CI = dyn_cast<llvm::ConstantInt>(Value))
     return CI->isZero();
@@ -458,6 +501,16 @@ llvm::Constant *CodeGenModule::getConstantSignedPointer(
 
   return getConstantSignedPointer(Pointer, Schema.getKey(), StorageAddress,
                                   OtherDiscriminator);
+}
+
+llvm::Constant *CodeGenModule::getConstantSignedPointer(llvm::Constant *Pointer,
+                                                        QualType PointeeType) {
+  CGPointerAuthInfo Info = getPointerAuthInfoForPointeeType(PointeeType);
+  if (!Info.shouldSign())
+    return Pointer;
+  return getConstantSignedPointer(
+      Pointer, Info.getKey(), nullptr,
+      cast<llvm::ConstantInt>(Info.getDiscriminator()));
 }
 
 /// If applicable, sign a given constant function pointer with the ABI rules for
@@ -707,19 +760,37 @@ Address Address::getResignedAddress(const CGPointerAuthInfo &NewInfo,
 
   // Nothing to do if neither the current or the new ptrauth info needs signing.
   if (!CurInfo.isSigned() && !NewInfo.isSigned())
-    return Address(getBasePointer(), getElementType(), getAlignment(),
+    return Address(getUnsignedPointer(), getElementType(), getAlignment(),
                    isKnownNonNull());
 
   assert(ElementType && "Effective type has to be set");
-  assert(!Offset && "unexpected non-null offset");
 
   // If the current and the new ptrauth infos are the same and the offset is
   // null, just cast the base pointer to the effective type.
   if (CurInfo == NewInfo && !hasOffset())
     Val = getBasePointer();
-  else
-    Val = CGF.emitPointerAuthResign(getBasePointer(), QualType(), CurInfo,
-                                    NewInfo, isKnownNonNull());
+  else {
+    if (Offset) {
+      assert(isSigned() && "signed pointer expected");
+      // Authenticate the base pointer.
+      Val = CGF.emitPointerAuthResign(getBasePointer(), QualType(), CurInfo,
+                                      CGPointerAuthInfo(), isKnownNonNull());
+
+      // Add offset to the authenticated pointer.
+      unsigned AS = cast<llvm::PointerType>(getBasePointer()->getType())
+                        ->getAddressSpace();
+      Val = CGF.Builder.CreateBitCast(Val,
+                                      llvm::PointerType::get(CGF.Int8Ty, AS));
+      Val = CGF.Builder.CreateGEP(CGF.Int8Ty, Val, Offset, "resignedgep");
+
+      // Sign the pointer using the new ptrauth info.
+      Val = CGF.emitPointerAuthResign(Val, QualType(), CGPointerAuthInfo(),
+                                      NewInfo, isKnownNonNull());
+    } else {
+      Val = CGF.emitPointerAuthResign(getBasePointer(), QualType(), CurInfo,
+                                      NewInfo, isKnownNonNull());
+    }
+  }
 
   Val = CGF.Builder.CreateBitCast(Val, getType());
   return Address(Val, getElementType(), getAlignment(), NewInfo,
@@ -728,6 +799,35 @@ Address Address::getResignedAddress(const CGPointerAuthInfo &NewInfo,
 
 llvm::Value *Address::emitRawPointerSlow(CodeGenFunction &CGF) const {
   return CGF.getAsNaturalPointerTo(*this, QualType());
+}
+
+void Address::addOffset(CharUnits V, llvm::Type *Ty, CGBuilderTy &Builder) {
+  assert(isSigned() &&
+         "shouldn't add an offset if the base pointer isn't signed");
+  Alignment = Alignment.alignmentAtOffset(V);
+  llvm::Value *FixedOffset =
+      llvm::ConstantInt::get(Builder.getCGF()->IntPtrTy, V.getQuantity());
+  addOffset(FixedOffset, Ty, Builder, Alignment);
+}
+
+void Address::addOffset(llvm::Value *V, llvm::Type *Ty, CGBuilderTy &Builder,
+                        CharUnits NewAlignment) {
+  assert(isSigned() &&
+         "shouldn't add an offset if the base pointer isn't signed");
+  ElementType = Ty;
+  Alignment = NewAlignment;
+
+  if (!Offset) {
+    Offset = V;
+    return;
+  }
+
+  Offset = Builder.CreateAdd(Offset, V, "add");
+}
+
+llvm::Value *RValue::getAggregatePointer(QualType PointeeType,
+                                         CodeGenFunction &CGF) const {
+  return CGF.getAsNaturalPointerTo(getAggregateAddress(), PointeeType);
 }
 
 llvm::Value *LValue::getPointer(CodeGenFunction &CGF) const {
@@ -743,5 +843,15 @@ llvm::Value *LValue::emitResignedPointer(QualType PointeeTy,
 
 llvm::Value *LValue::emitRawPointer(CodeGenFunction &CGF) const {
   assert(isSimple());
+  return Addr.isValid() ? Addr.emitRawPointer(CGF) : nullptr;
+}
+
+llvm::Value *AggValueSlot::getPointer(QualType PointeeTy,
+                                      CodeGenFunction &CGF) const {
+  Address SignedAddr = CGF.getAsNaturalAddressOf(Addr, PointeeTy);
+  return SignedAddr.getBasePointer();
+}
+
+llvm::Value *AggValueSlot::emitRawPointer(CodeGenFunction &CGF) const {
   return Addr.isValid() ? Addr.emitRawPointer(CGF) : nullptr;
 }

@@ -18,6 +18,7 @@
 #include "CGDebugInfo.h"
 #include "CGHLSLRuntime.h"
 #include "CGOpenMPRuntime.h"
+#include "CGRecordLayout.h"
 #include "CodeGenModule.h"
 #include "CodeGenPGO.h"
 #include "TargetInfo.h"
@@ -565,8 +566,11 @@ void CodeGenFunction::FinishFunction(SourceLocation EndLoc) {
     ReturnBlock.getBlock()->eraseFromParent();
   }
   if (ReturnValue.isValid()) {
+    // This only matters when ReturnValue isn't signed. ReturnValue is possibly
+    // signed only when the return is Indirect or InAlloca. In that case, a
+    // temporary alloca to store the return value isn't created.
     auto *RetAlloca =
-        dyn_cast<llvm::AllocaInst>(ReturnValue.emitRawPointer(*this));
+        dyn_cast_or_null<llvm::AllocaInst>(ReturnValue.getPointerIfNotSigned());
     if (RetAlloca && RetAlloca->use_empty()) {
       RetAlloca->eraseFromParent();
       ReturnValue = Address::invalid();
@@ -3298,4 +3302,18 @@ CodeGenFunction::EmitPointerAuthAuth(const CGPointerAuthInfo &PointerAuth,
 
   return EmitPointerAuthCommon(*this, PointerAuth, Pointer,
                                llvm::Intrinsic::ptrauth_auth);
+}
+
+llvm::Value *CodeGenFunction::EmitPointerAuthSign(QualType pointeeType,
+                                                  llvm::Value *pointer) {
+  CGPointerAuthInfo pointerAuth =
+      CGM.getPointerAuthInfoForPointeeType(pointeeType);
+  return EmitPointerAuthSign(pointerAuth, pointer);
+}
+
+llvm::Value *CodeGenFunction::EmitPointerAuthAuth(QualType pointeeType,
+                                                  llvm::Value *pointer) {
+  CGPointerAuthInfo pointerAuth =
+      CGM.getPointerAuthInfoForPointeeType(pointeeType);
+  return EmitPointerAuthAuth(pointerAuth, pointer);
 }

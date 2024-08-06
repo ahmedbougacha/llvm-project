@@ -254,6 +254,9 @@ public:
 void AggExprEmitter::EmitAggLoadOfLValue(const Expr *E) {
   LValue LV = CGF.EmitLValue(E);
 
+  if (!CGF.CGM.getCodeGenOpts().NullPointerIsValid)
+    LV = LV.setKnownNonNull();
+
   // If the type of the l-value is atomic, then do an atomic load.
   if (LV.getType()->isAtomicType() || CGF.LValueIsSuitableForInlineAtomic(LV)) {
     CGF.EmitAtomicLoad(LV, E->getExprLoc(), Dest);
@@ -328,8 +331,8 @@ void AggExprEmitter::withReturnValueSlot(
   if (!UseTemp)
     return;
 
-  assert(Dest.isIgnored() || Dest.emitRawPointer(CGF) !=
-                                 Src.getAggregatePointer(E->getType(), CGF));
+  assert(Dest.getAddress().isSigned() || Dest.isIgnored() ||
+         Dest.emitRawPointer(CGF) != Src.getAggregatePointer(E->getType(), CGF));
   EmitFinalDestCopy(E->getType(), Src);
 
   if (!RequiresDestruction && LifetimeStartInst) {

@@ -185,6 +185,11 @@ template <> struct DominatingValue<Address> {
     DominatingLLVMValue::saved_type BasePtr;
     llvm::Type *ElementType;
     CharUnits Alignment;
+    unsigned PtrAuthKey : 28;
+    PointerAuthenticationMode PtrAuthMode : 2;
+    bool IsIsaPointer : 1;
+    bool AuthenticatesNullValues : 1;
+    DominatingLLVMValue::saved_type PtrAuthDiscriminator;
     DominatingLLVMValue::saved_type Offset;
     llvm::PointerType *EffectiveType;
   };
@@ -193,16 +198,36 @@ template <> struct DominatingValue<Address> {
     if (DominatingLLVMValue::needsSaving(value.getBasePointer()) ||
         DominatingLLVMValue::needsSaving(value.getOffset()))
       return true;
+    CGPointerAuthInfo info = value.getPointerAuthInfo();
+    if (info.isSigned() &&
+        DominatingLLVMValue::needsSaving(info.getDiscriminator()))
+      return true;
     return false;
   }
   static saved_type save(CodeGenFunction &CGF, type value) {
+    bool isSigned = value.getPointerAuthInfo().isSigned();
     return {DominatingLLVMValue::save(CGF, value.getBasePointer()),
-            value.getElementType(), value.getAlignment(),
-            DominatingLLVMValue::save(CGF, value.getOffset()), value.getType()};
+            value.getElementType(),
+            value.getAlignment(),
+            isSigned ? value.getPointerAuthInfo().getKey() : 0,
+            value.getPointerAuthInfo().getAuthenticationMode(),
+            value.getPointerAuthInfo().isIsaPointer(),
+            value.getPointerAuthInfo().authenticatesNullValues(),
+            isSigned ? DominatingLLVMValue::save(
+                           CGF, value.getPointerAuthInfo().getDiscriminator())
+                     : DominatingLLVMValue::saved_type(),
+            DominatingLLVMValue::save(CGF, value.getOffset()),
+            value.getType()};
   }
   static type restore(CodeGenFunction &CGF, saved_type value) {
+    CGPointerAuthInfo info;
+    if (value.PtrAuthMode != PointerAuthenticationMode::None)
+      info = CGPointerAuthInfo{
+          value.PtrAuthKey, value.PtrAuthMode, value.IsIsaPointer,
+          value.AuthenticatesNullValues,
+          DominatingLLVMValue::restore(CGF, value.PtrAuthDiscriminator)};
     return Address(DominatingLLVMValue::restore(CGF, value.BasePtr),
-                   value.ElementType, value.Alignment, CGPointerAuthInfo(),
+                   value.ElementType, value.Alignment, info,
                    DominatingLLVMValue::restore(CGF, value.Offset));
   }
 };
@@ -2675,15 +2700,7 @@ public:
                                           llvm::BasicBlock *LHSBlock,
                                           llvm::BasicBlock *RHSBlock,
                                           llvm::BasicBlock *MergeBlock,
-                                          QualType MergedType) {
-    Builder.SetInsertPoint(MergeBlock);
-    llvm::PHINode *PtrPhi = Builder.CreatePHI(LHS.getType(), 2, "cond");
-    PtrPhi->addIncoming(LHS.getBasePointer(), LHSBlock);
-    PtrPhi->addIncoming(RHS.getBasePointer(), RHSBlock);
-    LHS.replaceBasePointer(PtrPhi);
-    LHS.setAlignment(std::min(LHS.getAlignment(), RHS.getAlignment()));
-    return LHS;
-  }
+                                          QualType MergedType);
 
   /// Construct an address with the natural alignment of T. If a pointer to T
   /// is expected to be signed, the pointer passed to this function must have
@@ -4539,9 +4556,11 @@ public:
                                         GlobalDecl SchemaDecl,
                                         QualType SchemaType);
 
+  llvm::Value *EmitPointerAuthSign(QualType PointeeType, llvm::Value *Pointer);
   llvm::Value *EmitPointerAuthSign(const CGPointerAuthInfo &Info,
                                    llvm::Value *Pointer);
 
+  llvm::Value *EmitPointerAuthAuth(QualType PointeeType, llvm::Value *Pointer);
   llvm::Value *EmitPointerAuthAuth(const CGPointerAuthInfo &Info,
                                    llvm::Value *Pointer);
 
@@ -4581,6 +4600,9 @@ public:
                                         QualType SourceType, QualType DestType);
   Address authPointerToPointerCast(Address Ptr, QualType SourceType,
                                    QualType DestType);
+
+  Address EmitPointerAuthSign(Address Addr, QualType PointeeType);
+  Address EmitPointerAuthAuth(Address Addr, QualType PointeeType);
 
   Address getAsNaturalAddressOf(Address Addr, QualType PointeeTy);
 

@@ -2549,6 +2549,7 @@ public:
   bool isPointerType() const;
   bool isPointerOrReferenceType() const;
   bool isSignableType() const;
+  bool isSignablePointerType() const;
   bool isAnyPointerType() const;   // Any C pointer or ObjC object pointer
   bool isCountAttributedType() const;
   bool isBlockPointerType() const;
@@ -8213,7 +8214,9 @@ inline bool Type::isAnyPointerType() const {
   return isPointerType() || isObjCObjectPointerType();
 }
 
-inline bool Type::isSignableType() const { return isPointerType(); }
+inline bool Type::isSignableType() const { return isSignablePointerType(); }
+
+inline bool Type::isSignablePointerType() const { return isPointerType(); }
 
 inline bool Type::isBlockPointerType() const {
   return isa<BlockPointerType>(CanonicalType);

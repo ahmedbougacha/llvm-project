@@ -2986,10 +2986,11 @@ ScalarExprEmitter::EmitScalarPrePostIncDec(const UnaryOperator *E, LValue LV,
     Builder.SetInsertPoint(opBB);
     atomicPHI = Builder.CreatePHI(value->getType(), 2);
     atomicPHI->addIncoming(value, startBB);
-    value = atomicPHI;
+    value = CGF.EmitPointerAuthAuth(type->getPointeeType(), atomicPHI);
   } else {
     value = EmitLoadOfLValue(LV, E->getExprLoc());
     input = value;
+    value = CGF.EmitPointerAuthAuth(type->getPointeeType(), value);
   }
 
   // Special case of integer increment that we have to check first: bool++.
@@ -3238,6 +3239,7 @@ ScalarExprEmitter::EmitScalarPrePostIncDec(const UnaryOperator *E, LValue LV,
   if (atomicPHI) {
     llvm::BasicBlock *curBlock = Builder.GetInsertBlock();
     llvm::BasicBlock *contBB = CGF.createBasicBlock("atomic_cont", CGF.CurFn);
+    value = CGF.EmitPointerAuthSign(type->getPointeeType(), value);
     auto Pair = CGF.EmitAtomicCompareExchange(
         LV, RValue::get(atomicPHI), RValue::get(value), E->getExprLoc());
     llvm::Value *old = CGF.EmitToMemory(Pair.first.getScalarVal(), type);
@@ -3249,6 +3251,7 @@ ScalarExprEmitter::EmitScalarPrePostIncDec(const UnaryOperator *E, LValue LV,
   }
 
   // Store the updated result through the lvalue.
+  value = CGF.EmitPointerAuthSign(type->getPointeeType(), value);
   if (LV.isBitField()) {
     Value *Src = Previous ? Previous : value;
     CGF.EmitStoreThroughBitfieldLValue(RValue::get(value), LV, &value);
@@ -4111,6 +4114,10 @@ static Value *emitPointerArithmetic(CodeGenFunction &CGF,
     return CGF.Builder.CreateBitCast(result, pointer->getType());
   }
 
+  CGPointerAuthInfo PtrAuthInfo = CGF.CGM.getPointerAuthInfoForType(op.Ty);
+  if (PtrAuthInfo)
+    pointer = CGF.EmitPointerAuthAuth(PtrAuthInfo, pointer);
+
   QualType elementType = pointerType->getPointeeType();
   if (const VariableArrayType *vla
         = CGF.getContext().getAsVariableArrayType(elementType)) {
@@ -4131,7 +4138,8 @@ static Value *emitPointerArithmetic(CodeGenFunction &CGF,
           elemTy, pointer, index, isSigned, isSubtraction, op.E->getExprLoc(),
           "add.ptr");
     }
-    return pointer;
+    return PtrAuthInfo ? CGF.EmitPointerAuthSign(PtrAuthInfo, pointer)
+                       : pointer;
   }
 
   // Explicitly handle GNU void* and function pointer arithmetic extensions. The
@@ -4144,11 +4152,13 @@ static Value *emitPointerArithmetic(CodeGenFunction &CGF,
     elemTy = CGF.ConvertTypeForMem(elementType);
 
   if (CGF.getLangOpts().isSignedOverflowDefined())
-    return CGF.Builder.CreateGEP(elemTy, pointer, index, "add.ptr");
+    pointer = CGF.Builder.CreateGEP(elemTy, pointer, index, "add.ptr");
+  else
+    pointer = CGF.EmitCheckedInBoundsGEP(elemTy, pointer, index, isSigned,
+                                         isSubtraction, op.E->getExprLoc(),
+                                         "add.ptr");
 
-  return CGF.EmitCheckedInBoundsGEP(
-      elemTy, pointer, index, isSigned, isSubtraction, op.E->getExprLoc(),
-      "add.ptr");
+  return PtrAuthInfo ? CGF.EmitPointerAuthSign(PtrAuthInfo, pointer) : pointer;
 }
 
 // Construct an fmuladd intrinsic to represent a fused mul-add of MulOp and

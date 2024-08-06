@@ -1066,12 +1066,14 @@ llvm::DIType *CGDebugInfo::CreateQualifiedType(QualType Ty,
       bool IsaPointer = Qc.getPointerAuth().isIsaPointer();
       bool AuthenticatesNullValues =
           Qc.getPointerAuth().authenticatesNullValues();
+      unsigned AuthenticationMode =
+          (unsigned)Qc.getPointerAuth().getAuthenticationMode();
       Qc.removePointerAuth();
       assert(Qc.empty() && "Unknown type qualifier for debug info");
       auto *FromTy = getOrCreateType(QualType(T, 0), Unit);
-      return DBuilder.createPtrAuthQualifiedType(FromTy, Key, IsDiscr,
-                                                 ExtraDiscr, IsaPointer,
-                                                 AuthenticatesNullValues);
+      return DBuilder.createPtrAuthQualifiedType(
+          FromTy, Key, IsDiscr, ExtraDiscr, IsaPointer, AuthenticatesNullValues,
+          AuthenticationMode);
     } else {
       assert(Qc.empty() && "Unknown type qualifier for debug info");
       return getOrCreateType(QualType(T, 0), Unit);
