@@ -2247,7 +2247,7 @@ RValue CodeGenFunction::EmitLoadOfLValue(LValue LV, SourceLocation Loc) {
     auto Value = EmitLoadOfLValue(LV, Loc).getScalarVal();
     return RValue::get(EmitPointerAuthUnqualify(PtrAuth, Value, LV.getType(),
                                                 LV.getAddress(),
-                                                /*known nonnull*/ false));
+                                                /*KnownNonNull=*/false));
   }
 
   if (LV.isObjCWeak()) {
@@ -2481,7 +2481,7 @@ void CodeGenFunction::EmitStoreThroughLValue(RValue Src, LValue Dst,
   if (PointerAuthQualifier PointerAuth = Dst.getQuals().getPointerAuth()) {
     Src = RValue::get(EmitPointerAuthQualify(PointerAuth, Src.getScalarVal(),
                                              Dst.getType(), Dst.getAddress(),
-                                             /*known nonnull*/ false));
+                                             /*KnownNonNull=*/false));
   }
 
   // There's special magic for assigning into an ARC-qualified l-value.
@@ -4774,7 +4774,9 @@ LValue CodeGenFunction::EmitMemberExpr(const MemberExpr *E) {
     bool IsBaseCXXThis = IsWrappedCXXThis(BaseExpr);
     if (IsBaseCXXThis)
       SkippedChecks.set(SanitizerKind::Alignment, true);
-    if (IsBaseCXXThis || isa<DeclRefExpr>(BaseExpr))
+    if (IsBaseCXXThis || isa<DeclRefExpr>(BaseExpr) ||
+        llvm::isa_and_nonnull<llvm::ConstantPointerNull>(
+            Addr.getPointerIfNotSigned()))
       SkippedChecks.set(SanitizerKind::Null, true);
     EmitTypeCheck(TCK_MemberAccess, E->getExprLoc(), Addr, PtrTy,
                   /*Alignment=*/CharUnits::Zero(), SkippedChecks);

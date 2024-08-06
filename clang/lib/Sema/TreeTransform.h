@@ -5258,9 +5258,19 @@ QualType TreeTransform<Derived>::RebuildQualifiedType(QualType T,
   if (LocalPointerAuth.isPresent()) {
     if (T.getPointerAuth().isPresent()) {
       SemaRef.Diag(Loc, diag::err_ptrauth_qualifier_redundant)
-          << TL.getType() << "__ptrauth";
+          << TL.getType()
+          << (LocalPointerAuth.isRestrictedIntegral()
+                  ? "__ptrauth_restricted_intptr"
+                  : "__ptrauth");
       return QualType();
-    } else if (!T->isSignableType() && !T->isDependentType()) {
+    }
+    if (Quals.getPointerAuth().isRestrictedIntegral()) {
+      if (!T->isSignableIntegerType(SemaRef.getASTContext()) &&
+          !T->isDependentType()) {
+        SemaRef.Diag(Loc, diag::err_ptrauth_restricted_intptr_qualifier_pointer) << T;
+        return QualType();
+      }
+    } else if (!T->isSignablePointerType() && !T->isDependentType()) {
       SemaRef.Diag(Loc, diag::err_ptrauth_qualifier_nonpointer) << T;
       return QualType();
     }

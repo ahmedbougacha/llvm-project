@@ -2551,7 +2551,7 @@ bool Sema::CheckFunctionReturnType(QualType T, SourceLocation Loc) {
   // __ptrauth is illegal on a function return type.
   if (T.getPointerAuth()) {
     Diag(Loc, diag::err_ptrauth_qualifier_invalid)
-        << T << (int)!T->isSignableType() << 0;
+        << T << (int)!T->isSignablePointerType() << 0;
     return true;
   }
 
@@ -2663,7 +2663,7 @@ QualType Sema::BuildFunctionType(QualType T,
     } else if (ParamType.getPointerAuth()) {
       // __ptrauth is illegal on a function return type.
       Diag(Loc, diag::err_ptrauth_qualifier_invalid)
-          << T << (int)!T->isSignableType() << 1;
+          << T << (int)!T->isSignablePointerType() << 1;
       Invalid = true;
     }
 
@@ -4978,7 +4978,7 @@ static TypeSourceInfo *GetFullTypeForDeclarator(TypeProcessingState &state,
       // __ptrauth is illegal on a function return type.
       if (T.getPointerAuth()) {
         S.Diag(DeclType.Loc, diag::err_ptrauth_qualifier_invalid)
-            << T << (int)!T->isSignableType() << 0;
+            << T << (int)!T->isSignablePointerType() << 0;
       }
 
       if (LangOpts.OpenCL) {
@@ -8411,11 +8411,90 @@ static void HandleNeonVectorTypeAttr(QualType &CurType, const ParsedAttr &Attr,
   CurType = S.Context.getVectorType(CurType, numElts, VecKind);
 }
 
+namespace {
+
+struct PointerAuthenticationOption {
+  bool MissingComma = false;
+  bool ContainsInvalidCharacter = false;
+  SourceRange Range;
+  std::string Option;
+};
+
+} // anonymous namespace
+
+static SmallVector<PointerAuthenticationOption, 4>
+parsePtrAuthOptions(ASTContext &Ctx, StringLiteral *Options,
+                    CharUnits StartingOffset) {
+  uint32_t TokenStartIndex =
+      StartingOffset.getQuantity() / Options->getCharByteWidth();
+  SmallVector<PointerAuthenticationOption, 4> Result;
+  bool MissingComma = false;
+  auto OptionsLength = Options->getLength();
+  while (TokenStartIndex < OptionsLength) {
+    while (TokenStartIndex < OptionsLength &&
+           Options->getCodeUnit(TokenStartIndex) == ' ')
+      TokenStartIndex++;
+    uint32_t TokenEndIndex = TokenStartIndex;
+    SmallVector<char, 32> Buffer;
+    bool SawInvalidCharacter = false;
+    while (TokenEndIndex < OptionsLength) {
+      auto Character = Options->getCodeUnit(TokenEndIndex);
+      if (Character == ',' || (isascii(Character) && isWhitespace(Character))) {
+        break;
+      }
+
+      Buffer.push_back(Character);
+      if (!isascii(Character))
+        SawInvalidCharacter = true;
+      TokenEndIndex++;
+    }
+
+    auto StartLocation =
+        Options->getLocationOfByte(TokenStartIndex, Ctx.getSourceManager(),
+                                   Ctx.getLangOpts(), Ctx.getTargetInfo());
+    auto EndLocation =
+        Options->getLocationOfByte(TokenEndIndex, Ctx.getSourceManager(),
+                                   Ctx.getLangOpts(), Ctx.getTargetInfo());
+    auto OptionRange = SourceRange(StartLocation, EndLocation);
+    PointerAuthenticationOption Option{
+        .MissingComma = MissingComma,
+        .ContainsInvalidCharacter = SawInvalidCharacter,
+        .Range = OptionRange,
+        .Option = std::string(Buffer.data(), Buffer.size())};
+    Result.push_back(Option);
+    TokenStartIndex = TokenEndIndex;
+    while (TokenStartIndex < OptionsLength &&
+           isascii(Options->getCodeUnit(TokenStartIndex)) &&
+           isWhitespace(Options->getCodeUnit(TokenStartIndex)))
+      TokenStartIndex++;
+    MissingComma = true;
+    if (TokenStartIndex < OptionsLength &&
+        Options->getCodeUnit(TokenStartIndex) == ',') {
+      MissingComma = false;
+      TokenStartIndex++;
+      continue;
+    }
+  }
+  // Handle a trailing comma
+  if (!MissingComma && !Result.empty()) {
+    auto Location =
+        Options->getLocationOfByte(TokenStartIndex, Ctx.getSourceManager(),
+                                   Ctx.getLangOpts(), Ctx.getTargetInfo());
+    auto OptionRange = SourceRange(Location, Location);
+    PointerAuthenticationOption Option{.MissingComma = false,
+                                       .ContainsInvalidCharacter = false,
+                                       .Range = OptionRange};
+    Result.push_back(Option);
+  }
+
+  return Result;
+}
+
 /// Handle the __ptrauth qualifier.
 static void HandlePtrAuthQualifier(ASTContext &Ctx, QualType &T,
                                    const ParsedAttr &Attr, Sema &S) {
   auto AttributeName = Attr.getAttrName()->getName();
-  if (Attr.getNumArgs() < 1 || Attr.getNumArgs() > 3) {
+  if (Attr.getNumArgs() < 1 || Attr.getNumArgs() > 4) {
     S.Diag(Attr.getLoc(), diag::err_ptrauth_qualifier_bad_arg_count)
         << AttributeName;
     Attr.setInvalid();
@@ -8427,8 +8506,10 @@ static void HandlePtrAuthQualifier(ASTContext &Ctx, QualType &T,
       Attr.getNumArgs() >= 2 ? Attr.getArgAsExpr(1) : nullptr;
   Expr *ExtraDiscriminatorArg =
       Attr.getNumArgs() >= 3 ? Attr.getArgAsExpr(2) : nullptr;
+  Expr *AuthenticationOptionsArg =
+      Attr.getNumArgs() >= 4 ? Attr.getArgAsExpr(3) : nullptr;
 
-  unsigned Key;
+  int Key;
   if (S.checkConstantPointerAuthKey(KeyArg, Key)) {
     Attr.setInvalid();
     return;
@@ -8443,15 +8524,160 @@ static void HandlePtrAuthQualifier(ASTContext &Ctx, QualType &T,
   IsInvalid |= !S.checkPointerAuthDiscriminatorArg(
       ExtraDiscriminatorArg, Sema::PADAK_ExtraDiscPtrAuth, ExtraDiscriminator);
 
+  std::optional<PointerAuthenticationMode> AuthenticationMode = std::nullopt;
+  SourceRange AuthenticationModeRange;
+  bool IsIsaPointer = false;
+  SourceRange IsaPointerRange;
+  bool AuthenticatesNullValues = false;
+  SourceRange AuthenticatesNullValuesRange;
+  std::string EvaluatedString;
+  CharUnits OptionsOffset = CharUnits::Zero();
+  if (AuthenticationOptionsArg) {
+    bool EvaluatedExpression = false;
+    auto OptionsStringLiteral =
+        dyn_cast<StringLiteral>(AuthenticationOptionsArg);
+    if (!OptionsStringLiteral && !AuthenticationOptionsArg->containsErrors()) {
+      Expr::EvalResult Eval;
+      bool Result = AuthenticationOptionsArg->EvaluateAsRValue(Eval, Ctx);
+      if (Result && Eval.Val.isLValue()) {
+        auto *BaseExpr = Eval.Val.getLValueBase().dyn_cast<const Expr *>();
+        OptionsStringLiteral =
+            dyn_cast<StringLiteral>(const_cast<Expr *>(BaseExpr));
+        OptionsOffset = Eval.Val.getLValueOffset();
+        if (OptionsStringLiteral) {
+          EvaluatedExpression = true;
+          EvaluatedString = OptionsStringLiteral->getString().drop_front(
+              OptionsOffset.getQuantity());
+        }
+      }
+    }
+
+    if (!OptionsStringLiteral) {
+      S.Diag(AuthenticationOptionsArg->getExprLoc(),
+             diag::err_ptrauth_non_string_authentication_option)
+          << AuthenticationOptionsArg;
+      Attr.setInvalid();
+      return;
+    }
+
+    auto Options =
+        parsePtrAuthOptions(Ctx, OptionsStringLiteral, OptionsOffset);
+    auto OptionsRange = AuthenticationOptionsArg->getSourceRange();
+    auto DiagnoseOptionError = [&](const PointerAuthenticationOption &Opt,
+                                   auto Diagnostic,
+                                   std::optional<int> Mode = std::nullopt) {
+      auto DiagLocation =
+          EvaluatedExpression ? OptionsRange.getBegin() : Opt.Range.getBegin();
+      auto HighlightRange = EvaluatedExpression ? OptionsRange : Opt.Range;
+      auto Diag = S.Diag(DiagLocation, Diagnostic);
+      if (Mode)
+        Diag << *Mode;
+      Diag << HighlightRange;
+      IsInvalid = true;
+    };
+    for (auto Option : Options) {
+      if (Option.MissingComma)
+        DiagnoseOptionError(Option,
+                            diag::err_ptrauth_invalid_option_missing_comma);
+
+      if (Option.ContainsInvalidCharacter)
+        DiagnoseOptionError(Option, diag::err_ptrauth_invalid_option_character);
+
+      if (Option.Option.empty()) {
+        DiagnoseOptionError(Option,
+                            diag::err_ptrauth_empty_authentication_option);
+        continue;
+      }
+      auto ExplicitAuthenticationMode =
+          llvm::StringSwitch<std::optional<PointerAuthenticationMode>>(
+            Option.Option)
+              .Case(PointerAuthenticationOptionStrip,
+                    PointerAuthenticationMode::Strip)
+              .Case(PointerAuthenticationOptionSignAndStrip,
+                    PointerAuthenticationMode::SignAndStrip)
+              .Case(PointerAuthenticationOptionSignAndAuth,
+                    PointerAuthenticationMode::SignAndAuth)
+              .Default(std::nullopt);
+      if (ExplicitAuthenticationMode) {
+        if (AuthenticationMode) {
+          DiagnoseOptionError(
+              Option, diag::err_ptrauth_repeated_authentication_option, 0);
+          if (!EvaluatedExpression) {
+            S.Diag(AuthenticationModeRange.getBegin(),
+                   diag::note_ptrauth_previous_authentication_option)
+                << 0 << AuthenticationModeRange;
+          }
+        }
+        AuthenticationMode = *ExplicitAuthenticationMode;
+        AuthenticationModeRange = Option.Range;
+        continue;
+      }
+      if (Option.Option == PointerAuthenticationOptionIsaPointer) {
+        if (IsIsaPointer) {
+          DiagnoseOptionError(
+              Option, diag::err_ptrauth_repeated_authentication_option, 1);
+          if (!EvaluatedExpression) {
+            S.Diag(IsaPointerRange.getBegin(),
+                   diag::note_ptrauth_previous_authentication_option)
+                << 1 << IsaPointerRange;
+          }
+        }
+        IsIsaPointer = true;
+        IsaPointerRange = Option.Range;
+        continue;
+      }
+      if (Option.Option == PointerAuthenticationOptionAuthenticatesNullValues) {
+        if (AuthenticatesNullValues) {
+          DiagnoseOptionError(
+              Option, diag::err_ptrauth_repeated_authentication_option, 1);
+          if (!EvaluatedExpression) {
+            S.Diag(AuthenticatesNullValuesRange.getBegin(),
+                   diag::note_ptrauth_previous_authentication_option)
+                << 1 << AuthenticatesNullValuesRange;
+          }
+        }
+        AuthenticatesNullValues = true;
+        AuthenticatesNullValuesRange = Option.Range;
+        continue;
+      }
+
+      S.Diag(EvaluatedExpression ? OptionsRange.getBegin()
+                                 : Option.Range.getBegin(),
+             diag::err_ptrauth_unknown_authentication_option)
+          << Option.Option;
+      IsInvalid = true;
+    }
+    if (IsInvalid && EvaluatedExpression) {
+      S.Diag(AuthenticationOptionsArg->getBeginLoc(),
+             diag::note_ptrauth_evaluating_options)
+          << AuthenticationOptionsArg->getSourceRange() << EvaluatedString;
+    }
+  }
+
   if (IsInvalid) {
     Attr.setInvalid();
     return;
   }
 
-  if (!T->isSignableType() && !T->isDependentType()) {
-    S.Diag(Attr.getLoc(), diag::err_ptrauth_qualifier_nonpointer) << T;
-    Attr.setInvalid();
-    return;
+  if (!AuthenticationMode)
+    AuthenticationMode = PointerAuthenticationMode::SignAndAuth;
+
+  bool IsRestrictedIntegral = false;
+  if (Attr.getAttrName()->getName() == "__ptrauth_restricted_intptr") {
+    IsRestrictedIntegral = true;
+    if (!T->isSignableIntegerType(Ctx) && !T->isDependentType()) {
+      S.Diag(Attr.getLoc(),
+             diag::err_ptrauth_restricted_intptr_qualifier_pointer)
+          << T;
+      Attr.setInvalid();
+      return;
+    }
+  } else {
+    if (!T->isSignablePointerType() && !T->isDependentType()) {
+      S.Diag(Attr.getLoc(), diag::err_ptrauth_qualifier_nonpointer) << T;
+      Attr.setInvalid();
+      return;
+    }
   }
 
   if (T.getPointerAuth()) {
@@ -8470,8 +8696,16 @@ static void HandlePtrAuthQualifier(ASTContext &Ctx, QualType &T,
   assert((!IsAddressDiscriminatedArg || IsAddressDiscriminated <= 1) &&
          "address discriminator arg should be either 0 or 1");
   PointerAuthQualifier Qual = PointerAuthQualifier::Create(
-      Key, IsAddressDiscriminated, ExtraDiscriminator,
-      PointerAuthenticationMode::SignAndAuth, false, false);
+      Key, IsAddressDiscriminated, ExtraDiscriminator, *AuthenticationMode,
+      IsIsaPointer, AuthenticatesNullValues, IsRestrictedIntegral);
+
+  if (Qual.hasKeyNone() && !S.Context.canQualifyWithPtrAuthKeyNone(T)) {
+    S.Diag(Attr.getLoc(), diag::err_ptrauth_qualifier_signed_pointer_type)
+        << T;
+    Attr.setInvalid();
+    return;
+  }
+
   T = S.Context.getPointerAuthType(T, Qual);
 }
 

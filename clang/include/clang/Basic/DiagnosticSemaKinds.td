@@ -982,7 +982,7 @@ def err_ptrauth_qualifier_nonpointer : Error<
 def err_ptrauth_qualifier_redundant : Error<
   "type %0 is already %1-qualified">;
 def err_ptrauth_qualifier_bad_arg_count : Error<
-  "%0 qualifier must take between 1 and 3 arguments">;
+  "%0 qualifier must take between 1 and 4 arguments">;
 def err_ptrauth_arg_not_ice : Error<
   "argument to __ptrauth must be an integer constant expression">;
 def err_ptrauth_address_discrimination_invalid : Error<
@@ -990,6 +990,33 @@ def err_ptrauth_address_discrimination_invalid : Error<
 def err_ptrauth_extra_discriminator_invalid : Error<
   "extra discriminator for __ptrauth must be between "
   "0 and %1; value is %0">;
+
+def err_ptrauth_restricted_intptr_qualifier_pointer : Error<
+  "__ptrauth_restricted_intptr qualifier may only be applied to pointer sized integer types; type here is %0">;
+def err_ptrauth_qualifier_signed_pointer_type : Error<
+  "signed pointer types may not be qualified with __ptrauth(ptrauth_key_none); type is %0">;
+def note_ptrauth_evaluating_options : Note<
+  "options parameter evaluated to '%0'">;
+
+def err_ptrauth_non_string_authentication_option : Error<
+  "__ptrauth options must be a string of comma separated flags, found '%0'">;
+def err_ptrauth_unknown_authentication_option : Error<
+  "unknown __ptrauth authentication option '%0'">;
+def err_ptrauth_repeated_authentication_option : Error<
+  "repeated __ptrauth authentication %select{mode|option}0">;
+def note_ptrauth_previous_authentication_option : Note<
+  "previous __ptrauth authentication %select{mode|option}0">;
+def err_ptrauth_empty_authentication_option : Error<
+  "empty __ptrauth authentication option">;
+def err_ptrauth_invalid_option_character : Error<
+  "invalid character in __ptrauth options">;
+def err_ptrauth_invalid_option_missing_comma : Error<
+  "missing comma between __ptrauth options"
+>;
+def err_ptrauth_invalid_authenticated_null_global : Error<
+  "%select{static locals|globals}0 with authenticated null values are currently unsupported"
+>;
+
 
 /// main()
 // static main() is not an error in C, just in C++.

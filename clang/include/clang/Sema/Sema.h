@@ -3458,7 +3458,7 @@ public:
 
   bool checkPointerAuthEnabled(SourceLocation Loc, SourceRange Range);
 
-  bool checkConstantPointerAuthKey(Expr *keyExpr, unsigned &key);
+  bool checkConstantPointerAuthKey(Expr *keyExpr, int &key);
 
   enum PointerAuthDiscArgKind {
     // Address discrimination argument of __ptrauth.

@@ -72,7 +72,8 @@ namespace {
       //   value of the expression to the unqualified, non-atomic version of
       //   the named type.
       if (!S.Context.getLangOpts().ObjC && !DestType->isRecordType() &&
-          !DestType->isArrayType() && !DestType.getPointerAuth()) {
+          !DestType->isArrayType() &&
+          !DestType.getPointerAuth().withoutKeyNone()) {
         DestType = DestType.getAtomicUnqualifiedType();
       }
 
@@ -170,7 +171,7 @@ namespace {
       // Destination type may not be qualified with __ptrauth.
       if (DestType.getPointerAuth()) {
         Self.Diag(DestRange.getBegin(), diag::err_ptrauth_qualifier_cast)
-            << DestType << DestRange;
+          << DestType << DestRange;
       }
     }
 

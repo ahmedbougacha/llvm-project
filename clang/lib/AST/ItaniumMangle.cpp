@@ -2846,6 +2846,14 @@ void CXXNameMangler::mangleQualifiers(Qualifiers Quals, const DependentAddressSp
   if (Quals.getObjCLifetime() == Qualifiers::OCL_Weak)
     mangleVendorQualifier("__weak");
 
+  // The __unsafe_unretained qualifier is *not* mangled, so that
+  // __unsafe_unretained types in ARC produce the same manglings as the
+  // equivalent (but, naturally, unqualified) types in non-ARC, providing
+  // better ABI compatibility.
+  //
+  // It's safe to do this because unqualified 'id' won't show up
+  // in any type signatures that need to be mangled.
+
   // __unaligned (from -fms-extensions)
   if (Quals.hasUnaligned())
     mangleVendorQualifier("__unaligned");
@@ -2881,21 +2889,21 @@ void CXXNameMangler::mangleQualifiers(Qualifiers Quals, const DependentAddressSp
 
   case Qualifiers::OCL_Strong:
     mangleVendorQualifier("__strong");
-    break;
+     break;
 
-  case Qualifiers::OCL_Autoreleasing:
-    mangleVendorQualifier("__autoreleasing");
-    break;
+   case Qualifiers::OCL_Autoreleasing:
+     mangleVendorQualifier("__autoreleasing");
+     break;
 
-  case Qualifiers::OCL_ExplicitNone:
-    // The __unsafe_unretained qualifier is *not* mangled, so that
-    // __unsafe_unretained types in ARC produce the same manglings as the
-    // equivalent (but, naturally, unqualified) types in non-ARC, providing
-    // better ABI compatibility.
-    //
-    // It's safe to do this because unqualified 'id' won't show up
-    // in any type signatures that need to be mangled.
-    break;
+   case Qualifiers::OCL_ExplicitNone:
+     // The __unsafe_unretained qualifier is *not* mangled, so that
+     // __unsafe_unretained types in ARC produce the same manglings as the
+     // equivalent (but, naturally, unqualified) types in non-ARC, providing
+     // better ABI compatibility.
+     //
+     // It's safe to do this because unqualified 'id' won't show up
+     // in any type signatures that need to be mangled.
+     break;
   }
 
   // <CV-qualifiers> ::= [r] [V] [K]    # restrict (C99), volatile, const

@@ -7413,7 +7413,7 @@ QualType Sema::FindCompositePointerType(SourceLocation Loc,
         return QualType();
 
       if (Q1.getPointerAuth().isEquivalent(Q2.getPointerAuth()))
-        Quals.setPointerAuth(Q1.getPointerAuth());
+        Quals.setPointerAuth(Q1.getPointerAuth().withoutKeyNone());
       else
         return QualType();
 

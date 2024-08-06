@@ -3503,10 +3503,12 @@ def ObjCRequiresPropertyDefs : InheritableAttr {
 }
 
 def PointerAuth : TypeAttr {
-  let Spellings = [CustomKeyword<"__ptrauth">];
+  let Spellings = [CustomKeyword<"__ptrauth">,
+                   CustomKeyword<"__ptrauth_restricted_intptr">];
   let Args = [IntArgument<"Key">,
               BoolArgument<"AddressDiscriminated", 1>,
-              IntArgument<"ExtraDiscriminator", 1>];
+              IntArgument<"ExtraDiscriminator", 1>,
+              StringArgument<"AuthenticationMode", 1>];
   let Documentation = [PtrAuthDocs];
 }
 
