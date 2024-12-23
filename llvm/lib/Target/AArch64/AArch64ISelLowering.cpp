@@ -11926,10 +11926,13 @@ SDValue AArch64TargetLowering::LowerRETURNADDR(SDValue Op,
 
   EVT VT = Op.getValueType();
   SDLoc DL(Op);
+  SDValue FrameAddr;
   unsigned Depth = Op.getConstantOperandVal(0);
   SDValue ReturnAddress;
   if (Depth) {
-    SDValue FrameAddr = LowerFRAMEADDR(Op, DAG);
+    SDNodeFlags Flags;
+    Flags.setNoUnsignedWrap(true);
+    FrameAddr = LowerFRAMEADDR(Op, DAG);
     SDValue Offset = DAG.getConstant(8, DL, getPointerTy(DAG.getDataLayout()));
     ReturnAddress = DAG.getLoad(
         VT, DL, DAG.getEntryNode(),
@@ -11939,6 +11942,16 @@ SDValue AArch64TargetLowering::LowerRETURNADDR(SDValue Op,
     // live-in.
     Register Reg = MF.addLiveIn(AArch64::LR, &AArch64::GPR64RegClass);
     ReturnAddress = DAG.getCopyFromReg(DAG.getEntryNode(), DL, Reg, VT);
+  }
+
+  // If we're doing LR signing, we need to fixup ReturnAddress: strip it.
+  if (Subtarget->isTargetMachO()) {
+    if (MF.getFunction().hasFnAttribute("ptrauth-returns"))
+      return SDValue(
+          DAG.getMachineNode(AArch64::XPACIuntied, DL, VT, ReturnAddress), 0);
+    // If not, on Darwin, we know we will never seen a frame with a signed LR.
+    else
+      return ReturnAddress;
   }
 
   // The XPACLRI instruction assembles to a hint-space instruction before

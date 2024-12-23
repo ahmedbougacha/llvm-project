@@ -165,6 +165,8 @@ private:
   void determineStackHazardSlot(MachineFunction &MF,
                                 BitVector &SavedRegs) const;
 
+  bool shouldAuthenticateLR(const MachineFunction &MF) const;
+
   /// Emit target zero call-used regs.
   void emitZeroCallUsedRegs(BitVector RegsToZero,
                             MachineBasicBlock &MBB) const override;

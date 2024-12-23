@@ -37,8 +37,9 @@ void AArch64FunctionInfo::initializeBaseYamlFields(
     HasRedZone = YamlMFI.HasRedZone;
 }
 
-static std::pair<bool, bool> GetSignReturnAddress(const Function &F) {
-  if (F.hasFnAttribute("ptrauth-returns"))
+static std::pair<bool, bool> GetSignReturnAddress(const Function &F,
+                                                  const AArch64Subtarget &STI) {
+  if (!STI.isTargetMachO() && F.hasFnAttribute("ptrauth-returns"))
     return {true, false}; // non-leaf
   // The function should be signed in the following situations:
   // - sign-return-address=all
@@ -90,7 +91,8 @@ AArch64FunctionInfo::AArch64FunctionInfo(const Function &F,
   // HasRedZone here.
   if (F.hasFnAttribute(Attribute::NoRedZone))
     HasRedZone = false;
-  std::tie(SignReturnAddress, SignReturnAddressAll) = GetSignReturnAddress(F);
+  std::tie(SignReturnAddress, SignReturnAddressAll) =
+      GetSignReturnAddress(F, *STI);
   SignWithBKey = ShouldSignWithBKey(F, *STI);
   HasELFSignedGOT = hasELFSignedGOTHelper(F, STI);
   // TODO: skip functions that have no instrumented allocas for optimization
