@@ -104,6 +104,20 @@ struct Shape {
     };
   };
 
+  // Ptrauth constant discriminator for the special fields in switch lowering.
+  struct SwitchFieldPtrauthDiscriminator {
+    enum {
+
+      // Constant discriminator for the resume field. The value is
+      // ptrauth_string_discriminator("coroutine:resume").
+      Resume = 0x5601,
+
+      // Constant discriminator for the destroy/cleanup field. The value is
+      // ptrauth_string_discriminator("coroutine:destroy").
+      Destroy = 0x3bf7
+    };
+  };
+
   coro::ABI ABI;
 
   StructType *FrameTy = nullptr;
@@ -121,9 +135,11 @@ struct Shape {
     unsigned IndexOffset;
     bool HasFinalSuspend;
     bool HasUnwindCoroEnd;
+    bool UseResumePtrAuth;
   };
 
   struct RetconLoweringStorage {
+    Constant *ResumePtrAuthInfo;
     Function *ResumePrototype;
     Function *Alloc;
     Function *Dealloc;
@@ -177,6 +193,19 @@ struct Shape {
   }
   ConstantInt *getIndex(uint64_t Value) const {
     return ConstantInt::get(getIndexType(), Value);
+  }
+
+  ConstantPtrAuth *getResumePtrAuthInfo() const {
+    switch (ABI) {
+    case coro::ABI::Switch:
+    case coro::ABI::Async:
+      return nullptr;
+    case coro::ABI::Retcon:
+    case coro::ABI::RetconOnce:
+      if (!RetconLowering.ResumePtrAuthInfo)
+        return nullptr;
+      return dyn_cast<ConstantPtrAuth>(RetconLowering.ResumePtrAuthInfo);
+    }
   }
 
   PointerType *getSwitchResumePointerType() const {

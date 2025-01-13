@@ -133,7 +133,32 @@ static void lowerAwaitSuspend(IRBuilder<> &Builder, CoroAwaitSuspendInst *CB,
     LLVMContext &Ctx = Builder.getContext();
     FunctionType *ResumeTy = FunctionType::get(
         Type::getVoidTy(Ctx), PointerType::getUnqual(Ctx), false);
-    auto *ResumeCall = Builder.CreateCall(ResumeTy, ResumeAddr, {NewCall});
+
+    // Because we're effectively emitting and immediately lowering a resume
+    // into an indirect call, the lowered resume call needs to authenticate
+    // the resume pointer if we're using ptrauth.  Add a bundle if needed.
+    // See CoroEarly's lowering of coro.resume/destroy.
+    SmallVector<OperandBundleDef, 1> OpBundles;
+    if (Shape.SwitchLowering.UseResumePtrAuth) {
+      // It's a resume, so we know the frame offset (0), and discriminator.
+      assert(CoroSubFnInst::ResumeIndex == 0);
+      // Because the frame offset is 0, we can just use the next handle address.
+      Value *Discriminator =
+          Builder.CreatePtrToInt(NewCall, Builder.getInt64Ty());
+      auto *ExtraDiscriminator = Builder.getInt64(
+          coro::Shape::SwitchFieldPtrauthDiscriminator::Resume);
+
+      auto *Blend = Intrinsic::getOrInsertDeclaration(CB->getModule(),
+                                                      Intrinsic::ptrauth_blend);
+      Discriminator =
+          Builder.CreateCall(Blend, {Discriminator, ExtraDiscriminator});
+
+      Value *BundleArgs[] = {/*Key=*/Builder.getInt32(0), Discriminator};
+      OpBundles.emplace_back("ptrauth", BundleArgs);
+    }
+
+    auto *ResumeCall =
+        Builder.CreateCall(ResumeTy, ResumeAddr, {NewCall}, OpBundles);
     ResumeCall->setCallingConv(CallingConv::Fast);
 
     // We can't insert the 'ret' instruction and adjust the cc until the
@@ -877,6 +902,19 @@ void coro::BaseCloner::create() {
     VMap[&A] = DummyArgs.back();
   }
 
+  switch (Shape.ABI) {
+  case coro::ABI::Retcon:
+  case coro::ABI::RetconOnce:
+    // In retcon coroutines, replace any remaining uses of the original
+    // storage value with the storage parameter.
+    VMap[Shape.getRetconCoroId()->getStorage()] = &*NewF->arg_begin();
+    break;
+
+  case coro::ABI::Switch:
+  case coro::ABI::Async:
+    break;
+  }
+
   SmallVector<ReturnInst *, 4> Returns;
 
   // Ignore attempts to change certain attributes of the function.
@@ -1041,8 +1079,10 @@ void coro::BaseCloner::create() {
 
   // Remap frame pointer.
   Value *OldFramePtr = VMap[Shape.FramePtr];
-  NewFramePtr->takeName(OldFramePtr);
-  OldFramePtr->replaceAllUsesWith(NewFramePtr);
+  if (OldFramePtr != NewFramePtr) {
+    NewFramePtr->takeName(OldFramePtr);
+    OldFramePtr->replaceAllUsesWith(NewFramePtr);
+  }
 
   // Remap vFrame pointer.
   auto *NewVFrame = Builder.CreateBitCast(
@@ -1366,6 +1406,47 @@ static void simplifySuspendPoints(coro::Shape &Shape) {
   }
 }
 
+/// Produced a signed pointer value with this schema.  If an address
+/// is provided, use that address as the address discriminator.
+static Value *emitSignedPointer(IRBuilder<> &Builder,
+                                ConstantInt *Key,
+                                ConstantInt *ExtraDiscriminator,
+                                Constant *ConstPointer,
+                                Value *Address) {
+  auto *Module = Builder.GetInsertBlock()->getModule();
+  auto *IntPtrTy = Builder.getIntPtrTy(Module->getDataLayout());
+
+  if (!Address) {
+    auto *NullAddress = Constant::getNullValue(Builder.getPtrTy());
+    return ConstantPtrAuth::get(ConstPointer, Key, ExtraDiscriminator,
+                                NullAddress);
+  }
+
+  // Blend the provided address with the extra discriminator if the extra
+  // discriminator is non-zero.
+  Value *Discriminator = Builder.CreatePtrToInt(Address, IntPtrTy);
+  if (!ExtraDiscriminator->isNullValue()) {
+    auto Blend =
+        Intrinsic::getOrInsertDeclaration(Module, Intrinsic::ptrauth_blend);
+    Discriminator =
+        Builder.CreateCall(Blend, {Discriminator, ExtraDiscriminator});
+  }
+
+  // Sign the pointer with the discriminator.
+
+  // The intrinsic wants an integer.
+  Value *Pointer = Builder.CreatePtrToInt(ConstPointer, IntPtrTy);
+
+  // call i64 @llvm.ptrauth.sign(i64 %pointer, i32 %key, i64 %discriminator)
+  auto Sign = Intrinsic::getOrInsertDeclaration(Module, Intrinsic::ptrauth_sign);
+  Pointer = Builder.CreateCall(Sign, { Pointer, Key, Discriminator });
+
+  // Convert back to the original pointer type.
+  Pointer = Builder.CreateIntToPtr(Pointer, ConstPointer->getType());
+
+  return Pointer;
+}
+
 namespace {
 
 struct SwitchCoroutineSplitter {
@@ -1577,20 +1658,45 @@ private:
     auto *ResumeAddr = Builder.CreateStructGEP(
         Shape.FrameTy, Shape.FramePtr, coro::Shape::SwitchFieldIndex::Resume,
         "resume.addr");
-    Builder.CreateStore(ResumeFn, ResumeAddr);
 
-    Value *DestroyOrCleanupFn = DestroyFn;
+    Value *ResumeFnPtr = ResumeFn;
+    if (Shape.SwitchLowering.UseResumePtrAuth) {
+      auto *ExtraDiscriminator = Builder.getInt64(
+          coro::Shape::SwitchFieldPtrauthDiscriminator::Resume);
+      ResumeFnPtr =
+          emitSignedPointer(Builder, /*Key=*/Builder.getInt32(0),
+                            ExtraDiscriminator, ResumeFn, ResumeAddr);
+    }
+
+    Builder.CreateStore(ResumeFnPtr, ResumeAddr);
+
+
+    auto *DestroyAddr = Builder.CreateStructGEP(
+        Shape.FrameTy, Shape.FramePtr, coro::Shape::SwitchFieldIndex::Destroy,
+        "destroy.addr");
+
+    Value *DestroyFnPtr = DestroyFn;
+    Value *CleanupFnPtr = CleanupFn;
+    if (Shape.SwitchLowering.UseResumePtrAuth) {
+      auto *ExtraDiscriminator = Builder.getInt64(
+          coro::Shape::SwitchFieldPtrauthDiscriminator::Destroy);
+      DestroyFnPtr =
+          emitSignedPointer(Builder, /*Key=*/Builder.getInt32(0),
+                            ExtraDiscriminator, DestroyFn, DestroyAddr);
+      CleanupFnPtr =
+          emitSignedPointer(Builder, /*Key=*/Builder.getInt32(0),
+                            ExtraDiscriminator, CleanupFn, DestroyAddr);
+    }
+
+    Value *DestroyOrCleanupFn = DestroyFnPtr;
 
     CoroIdInst *CoroId = Shape.getSwitchCoroId();
     if (CoroAllocInst *CA = CoroId->getCoroAlloc()) {
       // If there is a CoroAlloc and it returns false (meaning we elide the
       // allocation, use CleanupFn instead of DestroyFn).
-      DestroyOrCleanupFn = Builder.CreateSelect(CA, DestroyFn, CleanupFn);
+      DestroyOrCleanupFn = Builder.CreateSelect(CA, DestroyFnPtr, CleanupFnPtr);
     }
 
-    auto *DestroyAddr = Builder.CreateStructGEP(
-        Shape.FrameTy, Shape.FramePtr, coro::Shape::SwitchFieldIndex::Destroy,
-        "destroy.addr");
     Builder.CreateStore(DestroyOrCleanupFn, DestroyAddr);
   }
 
@@ -1889,10 +1995,26 @@ void coro::AnyRetconABI::splitCoroutine(Function &F, coro::Shape &Shape,
       Builder.CreateRet(RetV);
     }
 
+    // Sign the continuation value if requested.
+    Value *ContinuationValue = Continuation;
+    if (auto PtrAuthInfo = Shape.getResumePtrAuthInfo()) {
+      assert(!PtrAuthInfo->hasAddressDiscriminator() ||
+             PtrAuthInfo->hasSpecialAddressDiscriminator(
+               ConstantPtrAuth::AddrDiscriminator_UseCoroStorage));
+      IRBuilder<> Builder(Branch);
+      auto *AddressDiscriminator =
+          PtrAuthInfo->hasAddressDiscriminator() ? Id->getStorage() : nullptr;
+      auto *Key = const_cast<ConstantInt *>(PtrAuthInfo->getKey());
+      auto *ExtraDiscriminator =
+          const_cast<ConstantInt *>(PtrAuthInfo->getDiscriminator());
+      ContinuationValue = emitSignedPointer(Builder, Key, ExtraDiscriminator,
+                                            Continuation, AddressDiscriminator);
+    }
+
     // Branch to the return block.
     Branch->setSuccessor(0, ReturnBB);
     assert(ContinuationPhi);
-    ContinuationPhi->addIncoming(Continuation, SuspendBB);
+    ContinuationPhi->addIncoming(ContinuationValue, SuspendBB);
     for (auto [Phi, VUse] :
          llvm::zip_equal(ReturnPHIs, Suspend->value_operands()))
       Phi->addIncoming(VUse, SuspendBB);

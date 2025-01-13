@@ -1067,12 +1067,18 @@ public:
     return !getAddrDiscriminator()->isNullValue();
   }
 
-  /// A constant value for the address discriminator which has special
-  /// significance to ctors/dtors lowering. Regular address discrimination can't
-  /// be applied for them since uses of llvm.global_{c|d}tors are disallowed
-  /// (see Verifier::visitGlobalVariable) and we can't emit getelementptr
-  /// expressions referencing these special arrays.
-  enum { AddrDiscriminator_CtorsDtors = 1 };
+  enum {
+    /// A constant value for the address discriminator which has special
+    /// significance to ctors/dtors lowering. Regular address discrimination can't
+    /// be applied for them since uses of llvm.global_{c|d}tors are disallowed
+    /// (see Verifier::visitGlobalVariable) and we can't emit getelementptr
+    /// expressions referencing these special arrays.
+    AddrDiscriminator_CtorsDtors = 1,
+
+    /// A constant value for the address discriminator which has special
+    /// significance to coroutine lowering.
+    AddrDiscriminator_UseCoroStorage = 1,
+  };
 
   /// Whether the address uses a special address discriminator.
   /// These discriminators can't be used in real pointer-auth values; they

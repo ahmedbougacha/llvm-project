@@ -26,7 +26,7 @@ class Lowerer : public coro::LowererBase {
   PointerType *const AnyResumeFnPtrTy;
   Constant *NoopCoro = nullptr;
 
-  void lowerResumeOrDestroy(CallBase &CB, CoroSubFnInst::ResumeKind);
+  void lowerResumeOrDestroy(CallBase *CB, CoroSubFnInst::ResumeKind);
   void lowerCoroPromise(CoroPromiseInst *Intrin);
   void lowerCoroDone(IntrinsicInst *II);
   void lowerCoroNoop(IntrinsicInst *II);
@@ -43,11 +43,54 @@ public:
 // an address returned by coro.subfn.addr intrinsic. This is done so that
 // CGPassManager recognizes devirtualization when CoroElide pass replaces a call
 // to coro.subfn.addr with an appropriate function address.
-void Lowerer::lowerResumeOrDestroy(CallBase &CB,
+void Lowerer::lowerResumeOrDestroy(CallBase *CB,
                                    CoroSubFnInst::ResumeKind Index) {
-  Value *ResumeAddr = makeSubFnCall(CB.getArgOperand(0), Index, &CB);
-  CB.setCalledOperand(ResumeAddr);
-  CB.setCallingConv(CallingConv::Fast);
+  Value *ResumeAddr = makeSubFnCall(CB->getArgOperand(0), Index, CB);
+  CB->setCalledOperand(ResumeAddr);
+  CB->setCallingConv(CallingConv::Fast);
+
+  // With ptrauth, we also need to add the auth bundle to the now-indirect call.
+  if (!CB->getFunction()->hasFnAttribute("ptrauth-calls"))
+    return;
+
+  Builder.SetInsertPoint(CB);
+
+  // coro.subfn.addr will later be lowered to a load (if it's not elided), but
+  // we already need the fn address in the frame to use as address diversity.
+  auto *FnPtrTy = Builder.getPtrTy();
+  StructType *FrameTy =
+    StructType::create({FnPtrTy, FnPtrTy});
+  Value *Address = Builder.CreateConstInBoundsGEP2_32(
+      FrameTy, CB->getArgOperand(0), 0, Index);
+
+  Value *Discriminator = Builder.CreatePtrToInt(Address, Builder.getInt64Ty());
+
+  uint16_t ExtraDiscriminator = 0;
+  switch (Index) {
+  case CoroSubFnInst::ResumeIndex:
+    ExtraDiscriminator = coro::Shape::SwitchFieldPtrauthDiscriminator::Resume;
+    break;
+  case CoroSubFnInst::DestroyIndex:
+  case CoroSubFnInst::CleanupIndex:
+    ExtraDiscriminator = coro::Shape::SwitchFieldPtrauthDiscriminator::Destroy;
+    break;
+  default:
+    break;
+  }
+
+  if (ExtraDiscriminator) {
+    auto *Blend = Intrinsic::getOrInsertDeclaration(CB->getModule(),
+                                                    Intrinsic::ptrauth_blend);
+    Discriminator = Builder.CreateCall(
+        Blend, {Discriminator, Builder.getInt64(ExtraDiscriminator)});
+  }
+
+  Value *BundleArgs[] = {/*Key=*/Builder.getInt32(0), Discriminator};
+  OperandBundleDef OB("ptrauth", BundleArgs);
+  auto *NewCall = CallBase::addOperandBundle(CB, LLVMContext::OB_ptrauth, OB,
+                                             CB->getIterator());
+  CB->replaceAllUsesWith(NewCall);
+  CB->eraseFromParent();
 }
 
 // Coroutine promise field is always at the fixed offset from the beginning of
@@ -145,6 +188,33 @@ void Lowerer::lowerCoroNoop(IntrinsicInst *II) {
                                 GlobalVariable::PrivateLinkage, NoopCoroConst,
                                 "NoopCoro.Frame.Const");
     cast<GlobalVariable>(NoopCoro)->setNoSanitizeMetadata();
+
+    // With ptrauth, the frame's resume/destroy fn pointers are expected to be
+    // signed, to match the auth on the resume/destroy calls.
+    if (II->getFunction()->hasFnAttribute("ptrauth-calls")) {
+      Constant *ResumeAddr = ConstantExpr::getInBoundsGetElementPtr(
+          FrameTy, NoopCoro,
+          ArrayRef<Constant *>({Builder.getInt32(0), Builder.getInt32(0)}));
+      Constant *DestroyAddr = ConstantExpr::getInBoundsGetElementPtr(
+          FrameTy, NoopCoro,
+          ArrayRef<Constant *>({Builder.getInt32(0), Builder.getInt32(1)}));
+
+      ConstantInt *ResumeExtraDiscriminator = Builder.getInt64(
+          coro::Shape::SwitchFieldPtrauthDiscriminator::Resume);
+      ConstantInt *DestroyExtraDiscriminator = Builder.getInt64(
+          coro::Shape::SwitchFieldPtrauthDiscriminator::Destroy);
+
+      Constant *NoopResumePtr =
+          ConstantPtrAuth::get(NoopFn, /*Key=*/Builder.getInt32(0),
+                               ResumeExtraDiscriminator, ResumeAddr);
+      Constant *NoopDestroyPtr =
+          ConstantPtrAuth::get(NoopFn, /*Key=*/Builder.getInt32(0),
+                               DestroyExtraDiscriminator, DestroyAddr);
+
+      Constant* SignedValues[] = {NoopResumePtr, NoopDestroyPtr};
+      cast<GlobalVariable>(NoopCoro)->replaceInitializer(
+          ConstantStruct::get(FrameTy, SignedValues));
+    }
   }
 
   Builder.SetInsertPoint(II);
@@ -213,10 +283,10 @@ void Lowerer::lowerEarlyIntrinsics(Function &F) {
         F.setPresplitCoroutine();
         break;
       case Intrinsic::coro_resume:
-        lowerResumeOrDestroy(*CB, CoroSubFnInst::ResumeIndex);
+        lowerResumeOrDestroy(CB, CoroSubFnInst::ResumeIndex);
         break;
       case Intrinsic::coro_destroy:
-        lowerResumeOrDestroy(*CB, CoroSubFnInst::DestroyIndex);
+        lowerResumeOrDestroy(CB, CoroSubFnInst::DestroyIndex);
         break;
       case Intrinsic::coro_promise:
         lowerCoroPromise(cast<CoroPromiseInst>(&I));

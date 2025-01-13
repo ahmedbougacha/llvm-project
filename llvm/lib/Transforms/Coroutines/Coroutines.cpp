@@ -301,6 +301,7 @@ void coro::Shape::analyze(Function &F,
     ABI = coro::ABI::Switch;
     SwitchLowering.HasFinalSuspend = HasFinalSuspend;
     SwitchLowering.HasUnwindCoroEnd = HasUnwindCoroEnd;
+    SwitchLowering.UseResumePtrAuth = F.hasFnAttribute("ptrauth-calls");
 
     auto SwitchId = getSwitchCoroId();
     SwitchLowering.ResumeSwitch = nullptr;
@@ -333,10 +334,22 @@ void coro::Shape::analyze(Function &F,
     ContinuationId->checkWellFormed();
     auto Prototype = ContinuationId->getPrototype();
     RetconLowering.ResumePrototype = Prototype;
+    auto AuthInfo = ContinuationId->getPtrAuthInfo();
+    this->RetconLowering.ResumePtrAuthInfo = AuthInfo;
     RetconLowering.Alloc = ContinuationId->getAllocFunction();
     RetconLowering.Dealloc = ContinuationId->getDeallocFunction();
     RetconLowering.ReturnBlock = nullptr;
     RetconLowering.IsFrameInlineInStorage = false;
+
+    if (AuthInfo && AuthInfo->hasAddressDiscriminator() &&
+        !AuthInfo->hasSpecialAddressDiscriminator(
+          ConstantPtrAuth::AddrDiscriminator_UseCoroStorage)) {
+#ifndef NDEBUG
+      AuthInfo->dump();
+#endif
+      report_fatal_error("ptrauth-signed prototype must not have address "
+                         "diversity");
+    }
     break;
   }
   default:
@@ -562,6 +575,8 @@ void coro::Shape::emitDealloc(IRBuilder<> &Builder, Value *Ptr,
 /// Check that the given value is a well-formed prototype for the
 /// llvm.coro.id.retcon.* intrinsics.
 static void checkWFRetconPrototype(const AnyCoroIdRetconInst *I, Value *V) {
+  if (auto PtrAuth = dyn_cast<ConstantPtrAuth>(V))
+    V = const_cast<Constant*>(PtrAuth->getPointer());
   auto F = dyn_cast<Function>(V->stripPointerCasts());
   if (!F)
     fail(I, "llvm.coro.id.retcon.* prototype not a Function", V);

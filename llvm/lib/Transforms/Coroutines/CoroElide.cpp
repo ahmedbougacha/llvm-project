@@ -14,6 +14,7 @@
 #include "llvm/Analysis/InstructionSimplify.h"
 #include "llvm/Analysis/OptimizationRemarkEmitter.h"
 #include "llvm/IR/Dominators.h"
+#include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/InstIterator.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/FileSystem.h"
@@ -77,9 +78,87 @@ private:
 };
 } // end anonymous namespace
 
+static Value *replaceWithPtrauthSignedConstantIfNeeded(Constant *C,
+                                                       CoroSubFnInst *I) {
+  // With ptrauth, the call user of coro.subfn.addr expects the function
+  // pointer to be signed.
+  // Instead of having the pointers be signed in thesynthetic resumers info
+  // array, match up the user here less obtrusively, and remove the ptrauth
+  // bundle if found.  Conservatively emit a constant sign for the cases we
+  // don't understand.
+  SmallVector<CallBase *, 4> PtrauthCalls;
+  SmallVector<Instruction *, 2> OtherUsers;
+
+  for (User *U : I->users()) {
+    auto *CB = dyn_cast<CallBase>(U);
+    if (CB && CB->getCalledOperand() == I &&
+        CB->countOperandBundlesOfType(LLVMContext::OB_ptrauth) == 1)
+      PtrauthCalls.push_back(CB);
+    else
+      OtherUsers.push_back(cast<Instruction>(U));
+  }
+
+  // First, indirect authenticating calls can be made direct, without auth.
+  for (CallBase *CB : PtrauthCalls) {
+    auto *NewCall = CallBase::removeOperandBundle(CB, LLVMContext::OB_ptrauth,
+                                                  CB->getIterator());
+    CB->replaceAllUsesWith(NewCall);
+    CB->eraseFromParent();
+  }
+
+  // If any other uses survived, just give them a signed pointer.
+  // Ideally we'd optimize away matching pairs in instsimplify or
+  // instcombine, but the former can't right now, and the latter doesn't
+  // understand arbitrary discrimination in call bundles just yet.
+  if (OtherUsers.empty())
+    return C;
+
+  IRBuilder<> Builder(I);
+
+  Value *FramePtr = I->getFrame();
+  int Index = I->getIndex();
+
+  auto *FrameTy = StructType::get(I->getContext(),
+                                  {Builder.getPtrTy(), Builder.getPtrTy()});
+
+  auto *StorageAddr =
+      Builder.CreateConstInBoundsGEP2_32(FrameTy, FramePtr, 0, Index);
+  Value *Discriminator =
+      Builder.CreatePtrToInt(StorageAddr, Builder.getInt64Ty());
+
+  uint16_t ExtraDiscriminator = 0;
+  switch (Index) {
+  case CoroSubFnInst::ResumeIndex:
+    ExtraDiscriminator = coro::Shape::SwitchFieldPtrauthDiscriminator::Resume;
+    break;
+  case CoroSubFnInst::DestroyIndex:
+  case CoroSubFnInst::CleanupIndex:
+    ExtraDiscriminator = coro::Shape::SwitchFieldPtrauthDiscriminator::Destroy;
+    break;
+  default:
+    break;
+  }
+
+  if (ExtraDiscriminator) {
+    auto *Blend = Intrinsic::getOrInsertDeclaration(I->getModule(),
+                                                    Intrinsic::ptrauth_blend);
+    Discriminator = Builder.CreateCall(
+        Blend, {Discriminator, Builder.getInt64(ExtraDiscriminator)});
+  }
+
+  Value *V = Builder.CreatePtrToInt(C, Builder.getInt64Ty());
+
+  auto *Sign = Intrinsic::getOrInsertDeclaration(I->getModule(),
+                                                 Intrinsic::ptrauth_sign);
+  V = Builder.CreateCall(Sign, {V, /*Key=*/Builder.getInt32(0), Discriminator});
+
+  V = Builder.CreateIntToPtr(V, Builder.getPtrTy());
+  return V;
+}
+
 // Go through the list of coro.subfn.addr intrinsics and replace them with the
 // provided constant.
-static void replaceWithConstant(Constant *Value,
+static void replaceWithConstant(Constant *C,
                                 SmallVectorImpl<CoroSubFnInst *> &Users) {
   if (Users.empty())
     return;
@@ -88,17 +167,23 @@ static void replaceWithConstant(Constant *Value,
   // being replaced. Note: All coro.subfn.addr intrinsics return the same type,
   // so we only need to examine the type of the first one in the list.
   Type *IntrTy = Users.front()->getType();
-  Type *ValueTy = Value->getType();
+  Type *ValueTy = C->getType();
   if (ValueTy != IntrTy) {
     // May need to tweak the function type to match the type expected at the
     // use site.
     assert(ValueTy->isPointerTy() && IntrTy->isPointerTy());
-    Value = ConstantExpr::getBitCast(Value, IntrTy);
+    C = ConstantExpr::getBitCast(C, IntrTy);
   }
 
   // Now the value type matches the type of the intrinsic. Replace them all!
-  for (CoroSubFnInst *I : Users)
-    replaceAndRecursivelySimplify(I, Value);
+  for (CoroSubFnInst *I : Users) {
+    Value *V = C;
+
+    if (I->getFunction()->hasFnAttribute("ptrauth-calls"))
+      V = replaceWithPtrauthSignedConstantIfNeeded(C, I);
+
+    replaceAndRecursivelySimplify(I, V);
+  }
 }
 
 // See if any operand of the call instruction references the coroutine frame.
