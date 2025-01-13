@@ -164,6 +164,9 @@ private:
   VersionInfoType VersionInfo{};
   VersionInfoType TargetVariantVersionInfo{};
 
+  std::optional<unsigned> PtrAuthABIVersion{};
+  bool PtrAuthKernelABIVersion = false;
+
   // The list of linker options for LC_LINKER_OPTION.
   std::vector<std::vector<std::string>> LinkerOptions;
 
@@ -252,6 +255,13 @@ public:
     TargetVariantVersionInfo.SDKVersion = SDKVersion;
   }
 
+  std::optional<unsigned> getPtrAuthABIVersion() const {
+    return PtrAuthABIVersion;
+  }
+  void setPtrAuthABIVersion(unsigned V) { PtrAuthABIVersion = V; }
+  bool getPtrAuthKernelABIVersion() const { return PtrAuthKernelABIVersion; }
+  void setPtrAuthKernelABIVersion(bool V) { PtrAuthKernelABIVersion = V; }
+
   std::vector<std::vector<std::string>> &getLinkerOptions() {
     return LinkerOptions;
   }
@@ -270,7 +280,9 @@ public:
   /// @}
 
   void writeHeader(MachO::HeaderFileType Type, unsigned NumLoadCommands,
-                   unsigned LoadCommandsSize, bool SubsectionsViaSymbols);
+                   unsigned LoadCommandsSize, bool SubsectionsViaSymbols,
+                   std::optional<unsigned> PtrAuthABIVersion,
+                   bool PtrAuthKernelABIVersion);
 
   /// Write a segment load command.
   ///

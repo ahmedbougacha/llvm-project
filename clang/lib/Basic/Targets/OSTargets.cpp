@@ -11,6 +11,7 @@
 
 #include "OSTargets.h"
 #include "clang/Basic/MacroBuilder.h"
+#include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/StringRef.h"
 
 using namespace clang;
@@ -29,7 +30,11 @@ void getAppleMachODefines(MacroBuilder &Builder, const LangOptions &Opts,
   if (Opts.Sanitize.has(SanitizerKind::Address))
     Builder.defineMacro("_FORTIFY_SOURCE", "0");
 
-  // Apple defines __weak, __strong, and __unsafe_unretained even in C mode.
+  if (Opts.PointerAuthABIVersionEncoded)
+    Builder.defineMacro("__ptrauth_abi_version__",
+                        llvm::utostr(Opts.PointerAuthABIVersion));
+
+  // Darwin defines __weak, __strong, and __unsafe_unretained even in C mode.
   if (!Opts.ObjC) {
     // __weak is always defined, for use in blocks and with objc pointers.
     Builder.defineMacro("__weak", "__attribute__((objc_gc(weak)))");

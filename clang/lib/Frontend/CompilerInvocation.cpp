@@ -3526,6 +3526,13 @@ static void GeneratePointerAuthArgs(const LangOptions &Opts,
     GenerateArg(Consumer, OPT_fptrauth_elf_got);
   if (Opts.AArch64JumpTableHardening)
     GenerateArg(Consumer, OPT_faarch64_jump_table_hardening);
+
+  if (Opts.PointerAuthABIVersionEncoded) {
+    GenerateArg(Consumer, OPT_fptrauth_abi_version_EQ,
+                Twine(Opts.PointerAuthABIVersion));
+    if (Opts.PointerAuthKernelABIVersion)
+      GenerateArg(Consumer, OPT_fptrauth_kernel_abi_version);
+  }
 }
 
 static void ParsePointerAuthArgs(LangOptions &Opts, ArgList &Args,
@@ -3549,6 +3556,13 @@ static void ParsePointerAuthArgs(LangOptions &Opts, ArgList &Args,
   Opts.PointerAuthELFGOT = Args.hasArg(OPT_fptrauth_elf_got);
   Opts.AArch64JumpTableHardening =
       Args.hasArg(OPT_faarch64_jump_table_hardening);
+
+  Opts.PointerAuthABIVersionEncoded =
+      Args.hasArg(OPT_fptrauth_abi_version_EQ) ||
+      Args.hasArg(OPT_fptrauth_kernel_abi_version);
+  Opts.PointerAuthABIVersion =
+      getLastArgIntValue(Args, OPT_fptrauth_abi_version_EQ, 0, Diags);
+  Opts.PointerAuthKernelABIVersion = Args.hasArg(OPT_fptrauth_kernel_abi_version);
 }
 
 /// Check if input file kind and language standard are compatible.

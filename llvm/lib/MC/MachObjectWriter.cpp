@@ -7,6 +7,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/ADT/DenseMap.h"
+#include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/Twine.h"
 #include "llvm/BinaryFormat/MachO.h"
 #include "llvm/MC/MCAsmBackend.h"
@@ -174,7 +175,9 @@ const MCSymbol *MachObjectWriter::getAtom(const MCSymbol &S) const {
 void MachObjectWriter::writeHeader(MachO::HeaderFileType Type,
                                    unsigned NumLoadCommands,
                                    unsigned LoadCommandsSize,
-                                   bool SubsectionsViaSymbols) {
+                                   bool SubsectionsViaSymbols,
+                                   std::optional<unsigned> PtrAuthABIVersion,
+                                   bool PtrAuthKernelABIVersion) {
   uint32_t Flags = 0;
 
   if (SubsectionsViaSymbols)
@@ -191,14 +194,15 @@ void MachObjectWriter::writeHeader(MachO::HeaderFileType Type,
   W.write<uint32_t>(TargetObjectWriter->getCPUType());
 
   uint32_t Cpusubtype = TargetObjectWriter->getCPUSubtype();
-
-  // Promote arm64e subtypes to always be ptrauth-ABI-versioned, at version 0.
-  // We never need to emit unversioned binaries.
-  // And we don't support arbitrary ABI versions (or the kernel flag) yet.
-  if (TargetObjectWriter->getCPUType() == MachO::CPU_TYPE_ARM64 &&
-      Cpusubtype == MachO::CPU_SUBTYPE_ARM64E)
+  if (PtrAuthABIVersion) {
+    assert(TargetObjectWriter->getCPUType() == MachO::CPU_TYPE_ARM64 &&
+           Cpusubtype == MachO::CPU_SUBTYPE_ARM64E &&
+           "ptrauth ABI version is only supported on arm64e");
+    // Changes to this format should be reflected in MachO::getCPUSubType to
+    // support LTO.
     Cpusubtype = MachO::CPU_SUBTYPE_ARM64E_WITH_PTRAUTH_VERSION(
-        /*PtrAuthABIVersion=*/0, /*PtrAuthKernelABIVersion=*/false);
+        *PtrAuthABIVersion, PtrAuthKernelABIVersion);
+  }
 
   W.write<uint32_t>(Cpusubtype);
 
@@ -901,9 +905,19 @@ uint64_t MachObjectWriter::writeObject(MCAssembler &Asm) {
       offsetToAlignment(SectionDataFileSize, is64Bit() ? Align(8) : Align(4));
   SectionDataFileSize += SectionDataPadding;
 
+  // The ptrauth ABI version is limited to 4 bits.
+  std::optional<unsigned> PtrAuthABIVersion = getPtrAuthABIVersion();
+  if (PtrAuthABIVersion && *PtrAuthABIVersion > 63) {
+    Asm.getContext().reportError(SMLoc(), "invalid ptrauth ABI version: " +
+                                              utostr(*PtrAuthABIVersion));
+    PtrAuthABIVersion = 63;
+  }
+  bool PtrAuthKernelABIVersion = getPtrAuthKernelABIVersion();
+
   // Write the prolog, starting with the header and load command...
   writeHeader(MachO::MH_OBJECT, NumLoadCommands, LoadCommandsSize,
-              SubsectionsViaSymbols);
+              getSubsectionsViaSymbols(), PtrAuthABIVersion,
+              PtrAuthKernelABIVersion);
   uint32_t Prot =
       MachO::VM_PROT_READ | MachO::VM_PROT_WRITE | MachO::VM_PROT_EXECUTE;
   writeSegmentLoadCommand("", NumSections, 0, VMSize, SectionDataStart,

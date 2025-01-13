@@ -10,3 +10,5 @@
 .globl _foo
 _foo:
   ret
+
+.ptrauth_abi_version 0
