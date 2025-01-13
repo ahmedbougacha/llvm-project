@@ -108,12 +108,22 @@ unsigned AArch64InstrInfo::getInstSizeInBytes(const MachineInstr &MI) const {
 
   if (!MI.isBundle() && isTailCallReturnInst(MI)) {
     NumBytes = Desc.getSize() ? Desc.getSize() : 4;
+    const auto &STI = MF->getSubtarget<AArch64Subtarget>();
+
+    // FIXME: unify with below
+    if (STI.isTargetMachO()) {
+      if ((F.hasFnAttribute("ptrauth-auth-traps") &&
+           F.hasFnAttribute("ptrauth-returns"))
+          && !STI.hasFPAC()
+      )
+        NumBytes += 12;
+      return NumBytes;
+    }
 
     const auto *MFI = MF->getInfo<AArch64FunctionInfo>();
     if (!MFI->shouldSignReturnAddress(MF))
       return NumBytes;
 
-    const auto &STI = MF->getSubtarget<AArch64Subtarget>();
     auto Method = STI.getAuthenticatedLRCheckMethod(*MF);
     NumBytes += AArch64PAuth::getCheckerSizeInBytes(Method);
     return NumBytes;
