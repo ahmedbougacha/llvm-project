@@ -1515,12 +1515,26 @@ void AArch64AsmPrinter::LowerJumpTableDest(llvm::MCStreamer &OutStreamer,
 
 void AArch64AsmPrinter::LowerHardenedBRJumpTable(const MachineInstr &MI) {
   const MachineJumpTableInfo *MJTI = MF->getJumpTableInfo();
-  assert(MJTI && "Can't lower jump-table dispatch without JTI");
-
   const std::vector<MachineJumpTableEntry> &JTs = MJTI->getJumpTables();
-  assert(!JTs.empty() && "Invalid JT index for jump-table dispatch");
+  MachineOperand JTOp = MI.getOperand(0);
+  unsigned JTIdx = JTOp.getIndex();
+  const uint64_t NumTableEntries = JTs[JTIdx].MBBs.size();
+  int Size = AArch64FI->getJumpTableEntrySize(JTIdx);
+
+  // This has to be first because the compression pass based its reachability
+  // calculations on the start of the JumpTableDest instruction.
+  auto Label =
+      MF->getInfo<AArch64FunctionInfo>()->getJumpTableEntryPCRelSymbol(JTIdx);
+
+  // If we don't already have a symbol to use as the base, emit one first.
+  if (!Label) {
+    Label = MF->getContext().createTempSymbol();
+    AArch64FI->setJumpTableEntryInfo(JTIdx, Size, Label);
+    OutStreamer->emitLabel(Label);
+  }
 
   // Emit:
+  //   Lanchor:
   //     mov x17, #<size of table>     ; depending on table size, with MOVKs
   //     cmp x16, x17                  ; or #imm if table size fits in 12-bit
   //     csel x16, x16, xzr, ls        ; check for index overflow
@@ -1529,18 +1543,9 @@ void AArch64AsmPrinter::LowerHardenedBRJumpTable(const MachineInstr &MI) {
   //     add x17, Ltable@PAGEOFF
   //     ldrsw x16, [x17, x16, lsl #2] ; load table entry
   //
-  //   Lanchor:
   //     adr x17, Lanchor              ; compute target address
   //     add x16, x17, x16
   //     br x16                        ; branch to target
-
-  MachineOperand JTOp = MI.getOperand(0);
-
-  unsigned JTI = JTOp.getIndex();
-  assert(!AArch64FI->getJumpTableEntryPCRelSymbol(JTI) &&
-         "unsupported compressed jump table");
-
-  const uint64_t NumTableEntries = JTs[JTI].MBBs.size();
 
   // cmp only supports a 12-bit immediate.  If we need more, materialize the
   // immediate, using x17 as a scratch register.
@@ -1597,27 +1602,34 @@ void AArch64AsmPrinter::LowerHardenedBRJumpTable(const MachineInstr &MI) {
                                    .addOperand(JTMCLo)
                                    .addImm(0));
 
-  EmitToStreamer(*OutStreamer, MCInstBuilder(AArch64::LDRSWroX)
-                                   .addReg(AArch64::X16)
-                                   .addReg(AArch64::X17)
-                                   .addReg(AArch64::X16)
-                                   .addImm(0)
-                                   .addImm(1));
+  // Load the number of instruction-steps to offset from the label.
+  unsigned LdrOpcode;
+  switch (Size) {
+  case 1: LdrOpcode = AArch64::LDRBBroX; break;
+  case 2: LdrOpcode = AArch64::LDRHHroX; break;
+  case 4: LdrOpcode = AArch64::LDRSWroX; break;
+  default:
+    llvm_unreachable("Unknown jump table size");
+  }
 
-  MCSymbol *AdrLabel = MF->getContext().createTempSymbol();
-  const auto *AdrLabelE = MCSymbolRefExpr::create(AdrLabel, MF->getContext());
-  AArch64FI->setJumpTableEntryInfo(JTI, 4, AdrLabel);
+  EmitToStreamer(*OutStreamer,
+                 MCInstBuilder(LdrOpcode)
+                     .addReg(Size == 4 ? AArch64::X16 : AArch64::W16)
+                     .addReg(AArch64::X17)
+                     .addReg(AArch64::X16)
+                     .addImm(0)
+                     .addImm(Size == 1 ? 0 : 1));
 
-  OutStreamer->emitLabel(AdrLabel);
+  auto *LabelExpr = MCSymbolRefExpr::create(Label, MF->getContext());
   EmitToStreamer(
       *OutStreamer,
-      MCInstBuilder(AArch64::ADR).addReg(AArch64::X17).addExpr(AdrLabelE));
+      MCInstBuilder(AArch64::ADR).addReg(AArch64::X17).addExpr(LabelExpr));
 
   EmitToStreamer(*OutStreamer, MCInstBuilder(AArch64::ADDXrs)
                                    .addReg(AArch64::X16)
                                    .addReg(AArch64::X17)
                                    .addReg(AArch64::X16)
-                                   .addImm(0));
+                                   .addImm(Size == 4 ? 0 : 2));
 
   EmitToStreamer(*OutStreamer, MCInstBuilder(AArch64::BR).addReg(AArch64::X16));
 }

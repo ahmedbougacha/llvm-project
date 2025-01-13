@@ -106,10 +106,13 @@ bool AArch64CompressJumpTables::scanFunction() {
 
 bool AArch64CompressJumpTables::compressJumpTable(MachineInstr &MI,
                                                   int Offset) {
-  if (MI.getOpcode() != AArch64::JumpTableDest32)
+  if (MI.getOpcode() != AArch64::JumpTableDest32 &&
+      MI.getOpcode() != AArch64::BR_JumpTable)
     return false;
 
-  int JTIdx = MI.getOperand(4).getIndex();
+  MachineOperand &JTMO =
+      MI.getOperand(MI.getOpcode() == AArch64::JumpTableDest32 ? 4 : 0);
+  int JTIdx = JTMO.getIndex();
   auto &JTInfo = *MF->getJumpTableInfo();
   const MachineJumpTableEntry &JT = JTInfo.getJumpTables()[JTIdx];
 
@@ -143,13 +146,15 @@ bool AArch64CompressJumpTables::compressJumpTable(MachineInstr &MI,
   auto *AFI = MF->getInfo<AArch64FunctionInfo>();
   if (isUInt<8>(Span / 4)) {
     AFI->setJumpTableEntryInfo(JTIdx, 1, MinBlock->getSymbol());
-    MI.setDesc(TII->get(AArch64::JumpTableDest8));
+    if (MI.getOpcode() == AArch64::JumpTableDest32)
+      MI.setDesc(TII->get(AArch64::JumpTableDest8));
     ++NumJT8;
     return true;
   }
   if (isUInt<16>(Span / 4)) {
     AFI->setJumpTableEntryInfo(JTIdx, 2, MinBlock->getSymbol());
-    MI.setDesc(TII->get(AArch64::JumpTableDest16));
+    if (MI.getOpcode() == AArch64::JumpTableDest32)
+      MI.setDesc(TII->get(AArch64::JumpTableDest16));
     ++NumJT16;
     return true;
   }
